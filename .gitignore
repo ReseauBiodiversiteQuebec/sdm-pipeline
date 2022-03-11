@@ -1,3 +1,4 @@
 scratch*
 renv*
 .Rprofile
+inst/doc

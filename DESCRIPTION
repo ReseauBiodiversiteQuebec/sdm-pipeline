@@ -5,22 +5,23 @@ Authors@R:
     person(given = "Sarah",
            family = "Valentin",
            role = c("aut", "cre"),
-           email = "sarah.valentin@usherbrooke.ca"
+           email = "sarah.valentin@usherbrooke.ca")
 Description: Package R intégrant les fonctions et données pour produire des Species Distribution Model (SDM) dans le contexte de la plateforme Biodiversité Québec. 
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2
 Suggests: 
     IRkernel (>= 1.3),
+    knitr,
     languageserver (>= 0.3.11),
     pkgdown (>= 1.6.1),
     rmarkdown (>= 2.11.2),
     testthat (>= 3.1.0.9000),
     usethis (>= 2.1.5.9000),
     vscDebugger (>= 0.4.7)
-Remotes:  
+Remotes: 
     r-lib/usethis,
     r-lib/testthat,
     r-lib/devtools,
@@ -30,4 +31,14 @@ Remotes:
     github::ManuelHentschel/vscDebugger,
     IRkernel/IRkernel
 Imports: 
-    devtools (>= 2.4.3)
+    dplyr,
+    devtools (>= 2.4.3),
+    raster,
+    terra,
+    ggplot2,
+    virtualspecies,
+    biogeo,
+    stringr,
+    CoordinateCleaner
+Config/testthat/edition: 3
+VignetteBuilder: knitr

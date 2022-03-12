@@ -1,6 +1,6 @@
-#' @title Remove collinear variables
+#' @title load_predictors
 #' 
-#' @name loadPredictors
+#' @name load_predictors
 #' 
 #' @param layersDir, string, path to the folder containing the initial raster layers
 #' @param subsetLayers, a vector, containing the name of layers to select. If NULL, all layers in dir.pred selected by default.

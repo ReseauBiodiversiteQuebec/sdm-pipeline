@@ -18,7 +18,7 @@ usethis::use_dev_package("IRkernel", type = "Suggests", remote = NULL)
 # Use dependancies
 usethis::use_package("dplyr", type = "Imports")
 usethis::use_package("raster", type = "Imports")
-usethis::use_package("terra", type = "Imports")
+usethis::use_package("terra", type = "Imports", min_version = TRUE)
 usethis::use_package("ggplot2", type = "Imports")
 usethis::use_package("virtualspecies", type = "Imports")
 usethis::use_package("biogeo", type = "Imports")
@@ -28,11 +28,9 @@ usethis::use_package("CoordinateCleaner", type = "Imports")
 
 # Create R functions
 
-usethis::use_r('map_species')
-usethis::use_test('map_species')
 
-usethis::use_r('fast_crop')
-usethis::use_test('fast_crop')
+usethis::use_r('load_predictors')
+usethis::use_test('load_predictors')
 
 usethis::use_r('remove_collinearity')
 usethis::use_test('remove_collinearity')

@@ -14,6 +14,45 @@ knitr::opts_chunk$set(
 )
 ```
 
-```{r setup}
+```{r}
 library(sdmpipeline)
 ```
+```{r}
+outputDir <- "C:/SDMpipeline/"
+```
+###############
+# Covariates  #
+###############
+
+# load Quebec mask
+```{r}
+qbc_us_shp <- rgdal::readOGR(dsn = sprintf("%s/data",outputDir), layer = "shape_study_area_nolakes_nad83")
+```
+# load covariates
+```{r}
+layersDir <- paste0(outputDir, "data/chelsa/") # where predictors variables are
+
+predDir <- "predictors_selection" # where list of non-collinear predictors will be saved
+dir.create(file.path(outputDir, predDir), showWarnings = FALSE) #dir.create() does not crash if the directory already exists}
+subsetLayers <- c("bio1", "bio2", "bio3") #example 
+predictors <- load_predictors(layersDir, # directory where tif files are stored
+                              mask = qbc_us_shp, # global study area to clip the rasters
+                             subsetLayers = subsetLayers,
+                             removeCollinear = T, # should we apply collinearity selection? recommended
+                              method = "vif.step", # method to remove collinearity
+                              sample = TRUE, 
+                              cutoff.vif = 10,
+                             nb.points = 500,
+                              export = F,
+                             loadNonCollinear = F, # Set to TRUE if list of non-collinear predicora already stored
+                             nonCollinearDir = paste(outputDir,
+                                                 predDir, 
+                                                 sep = "/"))
+proj <- terra::crs(predictors, proj = T)
+print(names(predictors))
+plot(predictors[[1]])
+
+```
+
+
+

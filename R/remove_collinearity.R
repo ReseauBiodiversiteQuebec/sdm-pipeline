@@ -1,15 +1,15 @@
+
 #' @title Remove collinear variables
-#'
+#' 
 #' @name remove_collinearity
-#'
 #' @param predictors, a raster, either from raster or terra format
 #' @param method, The correlation method to be used:"vif.cor", "vif.step", "pearson", "spearman"
 #' or "kendall". "vif.cor" and "vif.step" use the Variance Inflation factor and the pearson correlation, more details
-#' here https://www.rdocumentation.org/packages/usdm/versions/1.1-18/topics/vif. If your variables are skewed or have outliers
+#' here https://www.rdocumentation.org/packages/usdm/versions/1.1-18/topics/vif. If your variables are skewed or have outliers 
 #' (e.g. when working with precipitation variables) you should favour the Spearman or Kendall methods.
 #' @param method.cor.vif, the correlation method to be used with "vif.cor" method. "pearson", "spearman"
 #' or "kendall".
-#' @param mask, a
+#' @param mask, a 
 #' @param sample, boolean value. If TRUE, sample a number of points equal to nb.points before evaluating collinearity
 #' @param nb.points, a numeric value. Only used if sample.points = TRUE. The number of sampled points from the raster.
 #' @param cutoff.cor, a numeric value corresponding to the maximum threshold of linear correlation (for "vif.cor", "pearson", "spearman").
@@ -19,130 +19,125 @@
 #' @param path, a string. If export is TRUE, path to save the corrrelation matrix and list of uncorrelated variables.
 #' @return a raster stack of variables not intercorrelated
 #' @import terra raster virtualspecies
-#' @export
+#' @export 
 
 
 remove_collinearity <- function(predictors,
-                               method = "vif.cor",
-                               method.cor.vif = NULL,
-                               sample = FALSE,
-                               nb.points = 5000,
-                               cutoff.cor = 0.7,
-                               cutoff.vif = 10,
-                               export = FALSE,
-                               title_export = "",
-                               path = NULL) {
-    if (!method %in% c("none", "vif.cor", "vif.step", "pearson", "spearman", "kendall")) {
-        stop("method must be vif.cor, vif.step, pearson, spearman, or kendall")
-    }
+                                method = "vif.cor",
+                                method.cor.vif = NULL,
+                                sample = FALSE,
+                                nb.points = 5000,
+                                cutoff.cor = 0.7,
+                                cutoff.vif = 10,
+                                export = FALSE,
+                                title_export = "",
+                                path = NULL) {
+  
+  if (!method %in% c("none", "vif.cor", "vif.step", "pearson", "spearman", "kendall")) {
+    stop("method must be vif.cor, vif.step, pearson, spearman, or kendall")
+  }
+  
+  if (method %in% c("vif.cor", "pearson", "spearman", "kendall") && is.null(cutoff.cor)) {
+    cutoff.cor <- 0.8
+  }
+  
+  if (method == "vif.cor" && is.null(method.cor.vif)) {
+    method.cor.vif <- "pearson"
+  }
+  
+  if (!inherits(predictors, "SpatRaster")) {
+    stop("Predictors must be a SpatRaster object")
+  }
+  
 
-    if (method %in% c("vif.cor", "pearson", "spearman", "kendall") && is.null(cutoff.cor)) {
-        cutoff.cor <- 0.8
-    }
+  predictors_raster <- raster::stack(predictors)
 
-    if (!class(predictors) %in% c("RasterBrick", "RasterStack", "SpatRaster")) {
-        stop("predictors must be a RasterBrick, a RasterStack or a SpatRaster object")
-    }
-    if (!is.null(mask) & class(mask) %in% c("RasterBrick", "RasterStack")) {
-        predictors <- crop_model(predictors, mask)
-    }
-
-    if (!class(predictors) %in% c("RasterBrick", "RasterStack")) {
-        names.i <- names(predictors)
-        predictors <- raster::stack(predictors)
-        names(predictors) <- names.i # if not, names are sometimes modified by the functiom raster::stack
-    }
-
-
-    message(paste0("Removing collinearity in predictors with method ", method, "..."))
-
-    # By default, all the initial variables are retained.
-    retained <- names(predictors)
-
-
-    if (sample == FALSE) {
-        maxobservations <- raster::ncell(predictors) # by default, maxobservations of vifcor function = 5000.
+  message(paste0("Removing collinearity in predictors with method ", method, "..."))
+  
+  # By default, all the initial variables are retained.
+  retained <- names(predictors)
+  
+  
+  if (sample == FALSE) {
+    maxobservations <- terra::ncell(predictors) # by default, maxobservations of vifcor function = 5000.
+  } else {
+    maxobservations <- nb.points
+  }
+  message(paste0(maxobservations, " points used to calculate collinearity."))
+  
+  
+  if (method == "vif.cor") {
+    
+    excluded <- vif.cor(predictors_raster, th = cutoff.cor,
+                        method = method.cor.vif,
+                        maxobservations = maxobservations)
+    retained <- setdiff(names(predictors), excluded)
+  }
+  
+  if (method == "vif.step") {
+    
+    excluded <- vif.step(predictors_raster, th = cutoff.vif, maxobservations = maxobservations)
+    retained <- setdiff(names(predictors), excluded)
+  }
+  
+  
+  if(method %in% c("pearson", "spearman", "kendall")) {
+    retained <- virtualspecies::removeCollinearity(predictors_raster,  method = method,
+                                                   multicollinearity.cutoff = cutoff.cor, 
+                                                   plot = F, select.variables = T, 
+                                                   sample.points = sample,
+                                                   nb.points = maxobservations)
+    
+  }
+  
+  nb_excluded <- terra::nlyr(predictors) - length(retained)
+  
+  # If some variables excluded
+  if (length(nb_excluded) > 0) {
+    
+    final_predictors <- terra::subset(predictors, retained)
+    if (method %in% c("vif.step")) {
+      message(paste(paste(nb_excluded, collapse = ","),
+                    "variables excluded with VIF threshold = ", cutoff.vif))
     } else {
-        maxobservations <- nb.points
+      message(paste(paste(nb_excluded, collapse = ","),
+                    "variables excluded with correlation threshold = ", cutoff.cor))
+      
     }
-    message(paste0(maxobservations, " points used to calculate collinearity."))
-
-
-    if (method == "vif.cor") {
-        excluded <- vif.cor(predictors,
-            th = cutoff.cor,
-            method = method.cor.vif,
-            maxobservations = maxobservations
-        )
-        retained <- setdiff(names(predictors), excluded)
-    }
-
-    if (method == "vif.step") {
-        excluded <- vif.step(predictors, th = cutoff.vif, maxobservations = maxobservations)
-        retained <- setdiff(names(predictors), excluded)
-    }
-
-
-    if (method %in% c("pearson", "spearman", "kendall")) {
-        retained <- virtualspecies::remove_collinearity(predictors,
-            method = method,
-            multicollinearity.cutoff = cutoff.cor,
-            plot = F, select.variables = T,
-            sample.points = sample,
-            nb.points = maxobservations
-        )
-    }
-
-    nb_excluded <- raster::nlayers(predictors) - length(retained)
-
-    # If some variables excluded
-    if (length(nb_excluded) > 0) {
-        final_predictors <- raster::subset(predictors, retained)
-        if (method %in% c("vif.step")) {
-            message(paste(
-                paste(nb_excluded, collapse = ","),
-                "variables excluded with VIF threshold = ", cutoff.vif
-            ))
-        } else {
-            message(paste(
-                paste(nb_excluded, collapse = ","),
-                "variables excluded with correlation threshold = ", cutoff.cor
-            ))
-        }
-
-        # If no variables excluded
+    
+    # If no variables excluded
+  } else {  
+    final_vars <- predictors
+    if (method %in% c("vif.step")) {
+      message(paste("No variables excluded with VIF threshold = ", cutoff.vif))
     } else {
-        final_vars <- predictors
-        if (method %in% c("vif.step")) {
-            message(paste("No variables excluded with VIF threshold = ", cutoff.vif))
-        } else {
-            message(paste("No variables excluded with correlation threshold = ", cutoff.cor))
-        }
+      message(paste("No variables excluded with correlation threshold = ", cutoff.cor))
     }
-
-
-    if (export) {
-        if (is.null(path)) {
-            stop("You must provide a path to export the correlation matrix.")
-        }
-
-        message("Calculating correlation matrix for export")
-        cm <- correlation(predictors, plot = FALSE)
-        png(file = paste(path, "cm_plot.png", sep = "/"))
-        corrplot(cm,
-            tl.col = "black",
-            title = title_export
-        )
-        dev.off()
-        message("Correlation plot saved.")
-
-        write.table(retained, file = paste(path, "retained_predictor.csv", sep = "/"), row.names = F, col.names = F, sep = ";")
-        message("List of uncorrelated variables saved.")
+  }
+  
+  
+  if (export) {
+    if (is.null(path)) {
+      stop("You must provide a path to export the correlation matrix.")
     }
-
-
-    return(final_predictors)
+    
+    message("Calculating correlation matrix for export")
+    cm <- correlation(predictors_raster, plot = FALSE)
+    png(file = paste(path, 'cm_plot.png', sep = "/"))
+    corrplot(cm, tl.col = "black",
+             title = title_export)
+    dev.off()
+    message("Correlation plot saved.")
+    
+    write.table(retained, file = paste(path, "retained_predictor.csv", sep = "/"), row.names = F, col.names = F, sep = ";")
+    message("List of uncorrelated variables saved.")
+  }
+  
+  
+  return(final_predictors)
+  
 }
+
 
 # from usdm package (https://github.com/cran/usdm/blob/master/R/vif.R)
 maxCor <- function(k) {

@@ -1,5 +1,4 @@
-#' @title load_predictors
-#' 
+
 #' @name load_predictors
 #' 
 #' @param layersDir, string, path to the folder containing the initial raster layers
@@ -24,98 +23,146 @@
 #' @import terra raster
 #' @export 
 
-load_predictors <- function(layersDir,
-                           subsetLayers = NULL,
-                           removeCollinear = T,
-                           method = "vif.cor",
-                           method.cor.vif = NULL,
-                           proj = NULL,
-                           mask = NULL,
-                           sample = TRUE,
-                           nb.points = 5000,
-                           cutoff.cor = 0.7,
-                           cutoff.vif = 3,
-                           export = TRUE,
-                           loadNonCollinear = F,
-                           nonCollinearDir = NULL) {
+load_predictors <- function(from_tif = T,
+                            from_cube = F,
+                            cube_args = list(stac_path = "http://io.biodiversite-quebec.ca/stac/",
+                                             limit = 5000, 
+                                             collections = c("chelsa-clim"),     
+                                             t0 = "1981-01-01",
+                                             t1 = "1981-01-01",
+                                             spatial.res = 1000, # in meters
+                                             temporal.res = "P1Y",
+                                             aggregation = "mean",
+                                             resampling = "near",
+                                             buffer_box = 200000),
+                            predictors_dir = NULL,
+                            subset_layers = NULL,
+                            remove_collinear = T,
+                            method = "vif.cor",
+                            method_cor_vif = NULL,
+                            new_proj = NULL,
+                            mask = NULL,
+                            sample = TRUE,
+                            nb_points = 5000,
+                            cutoff_cor = 0.7,
+                            cutoff_vif = 3,
+                            export = TRUE,
+                            ouput_dir = NULL,
+                            as.list = T) {
   
   
   if (!method %in% c("none", "vif.cor", "vif.step", "pearson", "spearman", "kendall")) {
     stop("method must be vif.cor, vif.step, pearson, spearman, or kendall")
   }
   
-  if (method %in% c("vif.cor", "pearson", "spearman", "kendall") && is.null(cutoff.cor)) {
-    cutoff.cor <- 0.8
+  if (method %in% c("vif.cor", "pearson", "spearman", "kendall") && is.null(cutoff_cor)) {
+    cutoff_cor <- 0.8
   }
-
-  # Load filenames from dir.pred
-  files <- list.files(layersDir, pattern = "*.tif", full.names = TRUE)
   
-  if (length(files) == 0) {
-    stop(sprintf("No tif files found in the directory %s", layersDir))
+  if (from_tif) {
     
-  }
-  
-  #Load rasterss
-  predictorsRaw <- lapply(files,
-                          terra::rast)
-  predictorsRaw <- terra::rast(predictorsRaw)
-  
-  if (!is.null(mask)) {
-    predictorsRaw <- fast_crop(predictorsRaw, mask)
-  }
-  
-  
-  # Selecting specific layers 
-  if (!is.null(subsetLayers)) {
-    predictorsRaw <- terra::subset(predictorsRaw, subsetLayers)
     
-  }
-  
-  if (!is.null(proj)) {
-    predictorsRaw <- terra::project(predictorsRaw, proj)
+    # Load filenames from dir.pred
+    files <- list.files(predictors_dir, pattern = "*.tif", full.names = TRUE)
     
-  }
-  
-  # Selection of non-collinear predictors
-  if (removeCollinear) {
-    #If using an existing list of non-collinear
-    if (loadNonCollinear) {
-      if (file.exists(sprintf("%s/retained_predictor.csv",  nonCollinearDir))) {
-        nonCollinear <-
-          dplyr::pull(read_csv(
-            sprintf("%s/retained_predictor.csv",  nonCollinearDir),
-            col_names = FALSE
-          ), X1)
-        predictorsNC <- terra::subset(predictorsRaw, nonCollinear)
-        
-      } else {
-        predictorsNC <- predictorsRaw
-        warning("List of non-collinear predictors not found, using all predictors.")
-      }
+    if (length(files) == 0) {
+      stop(sprintf("No tif files found in the directory %s", predictors_dir))
       
+    }
+    
+    #Load rasterss
+    all_predictors <- lapply(files,
+                             terra::rast)
+    all_predictors <- terra::rast(all_predictors)
+    
+    if (!is.null(mask)) {
+      all_predictors <- fast_crop(all_predictors, mask)
+    }
+    
+    
+    # Selecting specific layers 
+    if (!is.null(subset_layers)) {
+      all_predictors <- terra::subset(all_predictors, subset_layers)
       
-    } else {
-      predictorsNC <- remove_collinearity(
-        predictorsRaw,
-        method = method,
-        sample = sample,
-        nb.points = nb.points,
-        cutoff.cor = cutoff.cor,
-        cutoff.vif = cutoff.vif,
-        export = export,
-        title = "Correlation plot of climatic and topographic variables.",
-        path = nonCollinearDir
-      )
+    }
+    
+    if (!is.null(new_proj)) {
+      all_predictors <- terra::project(all_predictors, new_proj)
       
     }
   } else {
-    predictorsNC <- predictorsRaw
-  }
-  
+    
+    bbox <-  shp_to_bbox(mask)
+    if (is.null(new_proj)) {
+      srs.cube <- sf::st_crs(mask)$proj4string
+    } else {
+      srs.cube <- new_proj   
+    }
+    cube_args_c <- append(cube_args, list(layers = subset_layers, 
+                                        srs.cube = srs.cube, use.obs = F, 
+                                        bbox = bbox))
+    
+    all_predictors <- do.call(load_cube, cube_args_c)
+    all_predictors <- gdalcubes::filter_geom(all_predictors,  sf::st_geometry(sf::st_as_sf(mask), srs = srs.cube))
+     }
+  nc_names <- names(all_predictors)
+  # Selection of non-collinear predictors
+  if (remove_collinear) {
+    if (sample) {
+      env_df <- sample_spatial_obj(all_predictors, nb_points = nb_points)
+    }
+    
+    nc_names <-detect_collinearity(env_df,
+                                   method = method ,
+                                   method_cor_vif = method_cor_vif,
+                                   cutoff_cor = cutoff_cor,
+                                   cutoff_vif = cutoff_vif,
+                                   export = export,
+                                   title_export = "Correlation plot of climatic and topographic variables.",
+                                   path = ouput_dir) 
+    
+  }                               
 
-  return(predictorsNC)
   
+  if (as.list) {
+    output <- nc_names
   
+} else {
+  if (from_tif) {
+    output <- terra::subset(all_predictors, nc_names)
+    
+  } else {
+    
+    cube_args_nc <- append(cube_args, list(layers = nc_names, 
+                                        srs.cube = srs.cube, use.obs = F, 
+                                        bbox = bbox_wgs84))
+    output <- do.call(load_cube, cube_args_nc)
+    output <- gdalcubes::filter_geom(output,  sf::st_geometry(sf::st_as_sf(mask), srs = srs.cube))
+    
+    
+  }
+}
+    return(output)
 }
 
+extract_gdal_cube <- function(cube, n_sample = 5000, simplify = T) {
+  
+  x <- gdalcubes::dimension_values(cube)$x
+  y <- gdalcubes::dimension_values(cube)$y
+  
+  all_points <- expand.grid(x,y) %>% setNames(c("x", "y"))
+  
+  if (n_sample >= nrow(all_points)) {
+    value_points <- gdalcubes::extract_geom(cube, sf::st_as_sf(all_points, coords = c("x", "y"),
+                                               crs = gdalcubes::srs(cube))) 
+  } else {
+    sample_points <- all_points[sample(1:nrow(all_points), n_sample),]
+    value_points <- gdalcubes::extract_geom(cube, sf::st_as_sf(sample_points, coords = c("x", "y"),
+                                                               crs = gdalcubes::srs(cube))) 
+  }
+  
+  if (simplify) {
+    value_points <- value_points %>% dplyr::select(-FID, -time)
+  }
+  value_points
+}

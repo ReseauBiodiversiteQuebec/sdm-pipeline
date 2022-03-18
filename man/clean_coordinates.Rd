@@ -24,6 +24,7 @@ clean_coordinates(
   zeros_rad = 0.5,
   threshold_env = 0.5,
   predictors_env = NULL,
+  country_ref = NULL,
   capitals_ref = NULL,
   centroids_ref = NULL,
   inst_ref = NULL,

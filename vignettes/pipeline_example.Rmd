@@ -15,10 +15,12 @@ knitr::opts_chunk$set(
 ```
 
 ```{r}
-library(sdmpipeline)
+#library(sdmpipeline)
+devtools::load_all()
 ```
 ```{r}
-outputDir <- "C:/SDMpipeline/"
+
+outputDir <- "C:/SDMpipeline"
 ```
 ###############
 # Covariates  #
@@ -30,29 +32,175 @@ qbc_us_shp <- rgdal::readOGR(dsn = sprintf("%s/data",outputDir), layer = "shape_
 ```
 # load covariates
 ```{r}
-layersDir <- paste0(outputDir, "data/chelsa/") # where predictors variables are
+
+layersDir <- paste0(outputDir, "/data/chelsa/") # where predictors variables are
 
 predDir <- "predictors_selection" # where list of non-collinear predictors will be saved
 dir.create(file.path(outputDir, predDir), showWarnings = FALSE) #dir.create() does not crash if the directory already exists}
-subsetLayers <- c("bio1", "bio2", "bio3") #example 
-predictors <- load_predictors(layersDir, # directory where tif files are stored
-                              mask = qbc_us_shp, # global study area to clip the rasters
-                             subsetLayers = subsetLayers,
-                             removeCollinear = T, # should we apply collinearity selection? recommended
-                              method = "vif.step", # method to remove collinearity
-                              sample = TRUE, 
-                              cutoff.vif = 10,
-                             nb.points = 500,
-                              export = F,
-                             loadNonCollinear = F, # Set to TRUE if list of non-collinear predicora already stored
-                             nonCollinearDir = paste(outputDir,
-                                                 predDir, 
-                                                 sep = "/"))
-proj <- terra::crs(predictors, proj = T)
-print(names(predictors))
-plot(predictors[[1]])
+subset_layers <- c("bio1", "bio2", "bio3") #or dplyr::pull(read_csv(
+           # sprintf("%s/%s/%s/retained_predictor.csv",  outputDir, predDir),
+          #  col_names = FALSE
+          # ), X1)
+
+#proj <- terra::crs(predictors, proj = T)
+#print(names(predictors))
+```
+```{r}
+predictors_nc <- load_predictors(from_tif = F,
+                            from_cube = T,
+                            cube_args = list(stac_path = "http://io.biodiversite-quebec.ca/stac/",
+            limit = 5000, 
+            collections = c("chelsa-clim"),     
+            t0 = "1981-01-01",
+            t1 = "1981-01-01",
+            spatial.res = 1000, # in meters
+            temporal.res = "P1Y",
+            aggregation = "mean",
+            resampling = "near",
+            buffer_box = NULL),
+                          predictors_dir = NULL,
+                           subset_layers = c("bio1", "bio2", "bio4"),
+                           remove_collinear = T,
+                           method = "vif.cor",
+                           method_cor_vif = NULL,
+                           new_proj = NULL,
+                           mask = qbc_us_shp,
+                           sample = TRUE,
+                           nb_points = 50000,
+                           cutoff_cor = 0.7,
+                           cutoff_vif = 3,
+                           export = TRUE,
+                           ouput_dir = getwd(),
+                           as.list = T)
 
 ```
 
 
+```{r}
+terra::plot(predictors[[1]])
+```
 
+# clean observations
+
+```{r}
+library(rgbif)
+species <- "Glyptemys insculpta"
+gbifData <- rgbif::occ_data(scientificName = species, hasCoordinate = T, limit = 2000) 
+presence <- gbifData$data
+presence <- presence %>% dplyr::select(key, species, decimalLongitude, decimalLatitude, year) %>%
+      dplyr::filter(year >= 1980 )%>%
+      dplyr::rename(id = key, scientificName = species) %>%
+      dplyr::mutate(id = as.double(id))
+
+presence <- create_projection(presence, lon = "decimalLongitude", lat = "decimalLatitude", 
+proj.from = "+proj=longlat +datum=WGS84", proj.to = proj, new.lon = "lon", new.lat = "lat") 
+
+```
+```{r}
+    clean_presence <- clean_coordinates(
+      presence,
+      predictors,
+      species_name = species,
+      srs = proj,
+      unique_id = "id",
+      lon = "lon",
+      lat = "lat",
+      species_col = "scientificName",
+      tests = c(
+        "equal",
+        "zeros",
+        "duplicates",
+        "same_pixel"
+      #  "centroids",
+     #   "seas",
+     #   "gbif",
+     #   "institutions",
+     #   "env"
+      ),
+      threshold_env = 0.8,
+       report = TRUE,
+      dir = outputDir,
+   value = "clean"
+    )
+    clean_presence <-  clean_presence %>% # summary = TRUE means the observations was identified as an outlier at least once during the cleaning procedure
+      dplyr::select(id, scientific_name, lon, lat)
+```
+
+
+```{r}
+study_extent <- create_study_extent(clean_presence, 
+                              lon = "lon",
+                              lat = "lat",
+                              proj = proj,
+                              method = "mcp",
+                              dist_buffer = 200000,
+                              shapefile_path = NULL)
+```
+
+```{r}
+predictors_study_extent <- fast_crop(predictors, study_extent)
+n_background <- 10000
+
+background <- create_background(clean_presence,
+                                   predictors_study_extent, 
+                                    lon = "lon",
+                                    lat = "lat",
+                                    method = "random", #will select random points in predictors_study_extent area
+                                    n = n_background,
+                                   density_bias = NULL) 
+    
+
+```
+```{r}
+clean_background <- clean_coordinates(
+      background,
+      predictors_study_extent,
+      species_name = species,
+      srs = proj,
+      unique_id = "id",
+      lon = "lon",
+      lat = "lat",
+      species_col = "scientific_name",
+      tests = c(
+        "equal",
+        "zeros",
+        "duplicates",
+        "same_pixel",
+        "env"
+       ),
+      threshold_env = 0.8,
+      value = "clean",
+      report = F
+    )
+    
+```
+```{r}
+library(ggplot2)
+    presence.bg <- dplyr::select(dplyr::bind_rows(clean_presence %>% dplyr::mutate(pa = 1),
+                                                  clean_background %>% dplyr::mutate(pa = 0)),
+                                 pa,lon,lat) %>% dplyr::mutate(pa = factor(pa))
+    
+    pb.vals <- terra::extract(predictors_study_extent, dplyr::select(presence.bg, lon, lat))
+    presence.bg.vals <- dplyr::bind_cols(presence.bg,
+                        pb.vals) %>% dplyr::select(-ID)
+    dens_plots <- create_density_plots(presence.bg.vals, factors = c(), export = T, path = "./density_plots.pdf" )
+dens_plots
+```
+```{r}
+  #dir.create(file.path(sprintf("%s/%s/maxEnt", outputDir, species)), showWarnings = FALSE) #dir.create() does not crash if the directory already exists}
+    library(ENMeval)
+    # First, we calculate models using the list of fc and rm provided
+    partition_type <-  c("block")
+    modTuning <- run_maxent(presence.bg.vals, 
+                             with_raster = F, # can be set to F to speed up
+                             algorithm = "maxent.jar",
+                             predictors = predictors_study_extent,
+                             partition_type = partition_type,
+                             factors = NULL,
+                              nfolds = 5, #used if partition_type is "randomkfold"
+                             rm = 1, fc = "L",
+                             parallel = T,
+                             updateProgress = T,
+                             parallelType = "doParallel")
+
+```

@@ -55,6 +55,7 @@ clean_coordinates <- function(x,
                              zeros_rad = 0.5,
                              threshold_env = 0.5,
                              predictors_env = NULL,
+                             country_ref = NULL,
                              capitals_ref = NULL, 
                              centroids_ref = NULL, 
                              inst_ref = NULL, 
@@ -173,7 +174,7 @@ clean_coordinates <- function(x,
     
     mask <- predictors[[1]]
     cell <- terra::cellFromXY(mask, 
-     xy = as.matrix(dplyr::select(x, dplyr::all_of(c(lon, lat)))))
+     xy <- as.matrix(dplyr::select(x, dplyr::all_of(c(lon, lat)))))
     dup <- duplicated(cell)
     out$pixel <- !dup
     if (verbose) {
@@ -195,7 +196,7 @@ clean_coordinates <- function(x,
     out$cen <- CoordinateCleaner::cc_cen(x,
                                          species = species_col,
                                          lon = "decimalLongitude", lat = "decimalLatitude", buffer = centroids_rad, test = centroids_detail,
-                                         ref = countryref, value = "flagged", verbose = verbose
+                                         ref = country_ref, value = "flagged", verbose = verbose
     )
   }
   
@@ -256,9 +257,9 @@ clean_coordinates <- function(x,
     out_val <- data.frame(matrix(NA, nrow = nrow(x1), ncol = length(allTests))) 
     names(out_val) <- allTests
     out_val <- out_val %>%
-      mutate(val = F)
+      dplyr::mutate(val = F)
     out <- out %>%
-      mutate(val = T)
+      dplyr::mutate(val = T)
     out <- rbind(out_val,
                  out)
   }
@@ -278,12 +279,12 @@ clean_coordinates <- function(x,
   }
   
   ret <- data.frame(dplyr::select(x, all_of(c(unique_id, species_col, lon, lat))), out, summary = suma)
-  names(ret) <- c(c("id", "scientific_name", lon, lat),
+  names(ret) <- c(c("id", "scientific_name", "lon", "lat"),
                   paste(".", names(out), sep = ""),
                   ".summary")
   
   
-  repo <- bind_cols(out %>%
+  repo <- dplyr::bind_cols(out %>%
                       dplyr::summarise(across(everything(), ~ sum(!.x, na.rm = TRUE))),
                     nb_init = length(suma),
                     nb_flagged = sum(!suma,
@@ -296,7 +297,7 @@ clean_coordinates <- function(x,
   
   
   flagged.obs <- ret %>% data.frame() 
-  clean.obs <- ret[suma, ] %>% dplyr::select(dplyr::all_of(c(unique_id, species_col, lon, lat))) %>% data.frame()
+  clean.obs <- ret[suma, ] %>% dplyr::select(dplyr::all_of(c("id", "scientific_name", "lon", "lat"))) %>% data.frame()
   
   
   if (report) {
@@ -403,8 +404,8 @@ if (is.null(cols)) {
   
   out <- dplyr::select(df_pred, all_of(cols)
             ) %>%  dplyr::mutate(dplyr::across(everything(), flag_env_outlier)
-    ) %>% rename_with(~paste0(.x, "_jn.out")
-    ) %>%  dplyr::mutate(sumOutl = rowSums(.==FALSE) 
+    ) %>% dplyr::rename_with(~paste0(.x, "_jn.out")
+    ) %>% dplyr::mutate(sumOutl = rowSums(.==FALSE) 
     ) %>% dplyr::mutate(flagged = ifelse(sumOutl >= nb_var, FALSE, TRUE)
     ) %>% dplyr::select(flagged)
   

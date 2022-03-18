@@ -1,7 +1,4 @@
-
-#' @title Remove collinear variables
-#' 
-#' @name remove_collinearity
+#' @name sample_spatial_obj
 #' @param predictors, a raster, either from raster or terra format
 #' @param method, The correlation method to be used:"vif.cor", "vif.step", "pearson", "spearman"
 #' or "kendall". "vif.cor" and "vif.step" use the Variance Inflation factor and the pearson correlation, more details
@@ -19,99 +16,118 @@
 #' @param path, a string. If export is TRUE, path to save the corrrelation matrix and list of uncorrelated variables.
 #' @return a raster stack of variables not intercorrelated
 #' @import terra raster virtualspecies
-#' @export 
 
+sample_spatial_obj <- function(obj_to_sample, nb_points = 5000) {
+  names_layers <- names(obj_to_sample)
 
-remove_collinearity <- function(predictors,
+  if(inherits(obj_to_sample, "RasterStack")) {
+    
+    if (raster::ncell(obj_to_sample) > nb_points) {
+      env_df <- raster::sampleRandom(obj_to_sample, size = nb_points, na.rm = TRUE)
+      
+    } else {
+      env_df <- raster::getValues(obj_to_sample) 
+    }
+
+  } else if (inherits(obj_to_sample, "SpatRaster")) {
+    if (terra::ncell(obj_to_sample) > nb_points) {
+      env_df <- terra::spatSample(obj_to_sample, size = nb_points, na.rm = TRUE,
+                                  method="random", replace=FALSE) %>% as.matrix()
+      
+    } else {
+      env_df <- terra::values(obj_to_sample, matrix = T)
+      
+    }
+    
+  } else if (inherits(obj_to_sample, "data.frame")) {
+    if (nrow(env_df) > nb_points) {
+      obj_to_sample <- obj_to_sample[sample(1:nrow(obj_to_sample), nb_points), ]
+    
+  } else {
+    env_df <- obj_to_sample
+  }
+  } else if (inherits(obj_to_sample, "cube")) {
+    env_df <- extract_gdal_cube(obj_to_sample, n_sample = nb_points, simplify = T)
+  }
+    env_df <- setNames(data.frame(env_df), names_layers)
+   message(paste0(nrow(env_df), " points randomly selected (excluding NA's)."))
+  return(env_df)
+}
+
+detect_collinearity <- function(env_df,
                                 method = "vif.cor",
-                                method.cor.vif = NULL,
-                                sample = FALSE,
-                                nb.points = 5000,
-                                cutoff.cor = 0.7,
-                                cutoff.vif = 10,
+                                method_cor_vif = NULL,
+                                cutoff_cor = 0.7,
+                                cutoff_vif = 10,
                                 export = FALSE,
                                 title_export = "",
                                 path = NULL) {
   
-  if (!method %in% c("none", "vif.cor", "vif.step", "pearson", "spearman", "kendall")) {
-    stop("method must be vif.cor, vif.step, pearson, spearman, or kendall")
-  }
-  
-  if (method %in% c("vif.cor", "pearson", "spearman", "kendall") && is.null(cutoff.cor)) {
-    cutoff.cor <- 0.8
-  }
-  
-  if (method == "vif.cor" && is.null(method.cor.vif)) {
-    method.cor.vif <- "pearson"
-  }
-  
-  if (!inherits(predictors, "SpatRaster")) {
-    stop("Predictors must be a SpatRaster object")
-  }
-  
 
-  predictors_raster <- raster::stack(predictors)
-
-  message(paste0("Removing collinearity in predictors with method ", method, "..."))
-  
-  # By default, all the initial variables are retained.
-  retained <- names(predictors)
-  
-  
-  if (sample == FALSE) {
-    maxobservations <- terra::ncell(predictors) # by default, maxobservations of vifcor function = 5000.
-  } else {
-    maxobservations <- nb.points
-  }
-  message(paste0(maxobservations, " points used to calculate collinearity."))
-  
+  #remove NA's
+  comp <-  complete.cases(env_df)
+  env_df <- env_df[comp, ]
   
   if (method == "vif.cor") {
     
-    excluded <- vif.cor(predictors_raster, th = cutoff.cor,
-                        method = method.cor.vif,
-                        maxobservations = maxobservations)
-    retained <- setdiff(names(predictors), excluded)
+    excluded <- vif.cor(env_df, th = cutoff_cor,
+                        method = method_cor_vif,
+                        maxobservations = nrow(env_df))
+    retained <- setdiff(names(env_df), excluded)
   }
   
   if (method == "vif.step") {
     
-    excluded <- vif.step(predictors_raster, th = cutoff.vif, maxobservations = maxobservations)
-    retained <- setdiff(names(predictors), excluded)
+    excluded <- vif.step(env_df, th = cutoff_vif, maxobservations = nrow(env_df))
+    retained <- setdiff(names(env_df), excluded)
   }
   
   
   if(method %in% c("pearson", "spearman", "kendall")) {
-    retained <- virtualspecies::removeCollinearity(predictors_raster,  method = method,
-                                                   multicollinearity.cutoff = cutoff.cor, 
-                                                   plot = F, select.variables = T, 
-                                                   sample.points = sample,
-                                                   nb.points = maxobservations)
+
+        # Correlation based on Pearson
+    cor.matrix <- 1 - abs(stats::cor(env_df, method = method))
     
+    # Transforming the correlation matrix into an ascendent hierarchical classification
+    dist.matrix <- stats::as.dist(cor.matrix)
+    ahc <- stats::hclust(dist.matrix, method = "complete")
+    groups <- stats::cutree(ahc, h = 1 - cutoff_cor)
+    if(length(groups) == max(groups)){ 
+      retained <- names(env_df)
+    } else { 
+      retained <- NULL
+      for (i in 1:max(groups))
+      {
+        retained <- c(retained, sample(names(groups[groups == i]), 1))
+      }
+    } 
+    excluded <- setdiff(names(env_df), retained)
+
   }
-  
-  nb_excluded <- terra::nlyr(predictors) - length(retained)
+
+  nb_excluded <- length(excluded)
   
   # If some variables excluded
   if (length(nb_excluded) > 0) {
     
-    final_predictors <- terra::subset(predictors, retained)
-    if (method %in% c("vif.step")) {
-      message(paste(paste(nb_excluded, collapse = ","),
-                    "variables excluded with VIF threshold = ", cutoff.vif))
+    if (method %in% c("vif.cor", "vif.step" )) {
+      message(sprintf("%s variables excluded with VIF threshold = %s",
+                      nb_excluded, cutoff_vif))
     } else {
-      message(paste(paste(nb_excluded, collapse = ","),
-                    "variables excluded with correlation threshold = ", cutoff.cor))
+      message(sprintf("%s variables excluded with method %s and cutoff_cor = %s", 
+                      nb_excluded, method, cutoff_cor))
       
     }
     
     # If no variables excluded
   } else {  
-    final_vars <- predictors
-    if (method %in% c("vif.step")) {
-      message(paste("No variables excluded with VIF threshold = ", cutoff.vif))
+    if (method %in% c("vif.cor", "vif.step" )) {
+      message(sprintf("No variables excluded with VIF threshold = %s",
+                      cutoff_vif))
     } else {
-      message(paste("No variables excluded with correlation threshold = ", cutoff.cor))
+      message(sprintf("No variables excluded with method %s and cutoff_cor = %s", 
+                      method, cutoff_cor))
+      
     }
   }
   
@@ -120,11 +136,15 @@ remove_collinearity <- function(predictors,
     if (is.null(path)) {
       stop("You must provide a path to export the correlation matrix.")
     }
+    if (method == "vif.cor") {
+      method <- method_cor_vif
+    } else if (method == "vif.step") {
+      method <- "pearson"
+    }
+    cm <- cor(env_df, method = method, use =  "complete.obs")
     
-    message("Calculating correlation matrix for export")
-    cm <- correlation(predictors_raster, plot = FALSE)
     png(file = paste(path, 'cm_plot.png', sep = "/"))
-    corrplot(cm, tl.col = "black",
+    corrplot::corrplot(cm, tl.col = "black",
              title = title_export)
     dev.off()
     message("Correlation plot saved.")
@@ -132,103 +152,91 @@ remove_collinearity <- function(predictors,
     write.table(retained, file = paste(path, "retained_predictor.csv", sep = "/"), row.names = F, col.names = F, sep = ";")
     message("List of uncorrelated variables saved.")
   }
-  
-  
-  return(final_predictors)
+  return(retained)
   
 }
 
 
 # from usdm package (https://github.com/cran/usdm/blob/master/R/vif.R)
 maxCor <- function(k) {
-    k <- abs(k)
-    n <- nrow(k)
-    for (i in 1:n) k[i:n, i] <- NA
-    w <- which.max(k)
-    c(rownames(k)[((w %/% nrow(k)) + 1)], colnames(k)[w %% nrow(k)])
+  k <- abs(k)
+  n <- nrow(k)
+  for (i in 1:n) k[i:n, i] <- NA
+  w <- which.max(k)
+  c(rownames(k)[((w %/% nrow(k)) + 1)], colnames(k)[w %% nrow(k)])
 }
 
 # from usdm package (https://github.com/cran/usdm/blob/master/R/vif.R)
 vif2 <- function(y, w) {
-    z <- rep(NA, length(w))
-    names(z) <- colnames(y)[w]
-    for (i in 1:length(w)) {
-        z[i] <- 1 / (1 - summary(lm(as.formula(paste(colnames(y)[w[i]], "~.", sep = "")), data = y))$r.squared)
-    }
-    return(z)
+  z <- rep(NA, length(w))
+  names(z) <- colnames(y)[w]
+  for (i in 1:length(w)) {
+    z[i] <- 1 / (1 - summary(lm(as.formula(paste(colnames(y)[w[i]], "~.", sep = "")), data = y))$r.squared)
+  }
+  return(z)
 }
 
 # from usdm package (https://github.com/cran/usdm/blob/master/R/vif.R)
 vif <- function(y) {
-    z <- rep(NA, ncol(y))
-    names(z) <- colnames(y)
-    for (i in 1:ncol(y)) {
-        z[i] <- 1 / (1 - summary(lm(y[, i] ~ ., data = y[-i]))$r.squared)
-    }
-    return(z)
+  z <- rep(NA, ncol(y))
+  names(z) <- colnames(y)
+  for (i in 1:ncol(y)) {
+    z[i] <- 1 / (1 - summary(lm(y[, i] ~ ., data = y[-i]))$r.squared)
+  }
+  return(z)
 }
 
 # adapted and corrected from usdm package (https://github.com/cran/usdm/blob/master/R/vif.R)
 
 vif.cor <- function(x, th = 0.9, method = "pearson", maxobservations = 5000) {
-    if (nlayers(x) == 1) stop("The Raster object should have at least two layers")
-    if (missing(method) || !method %in% c("pearson", "kendall", "spearman")) method <- "pearson"
-    LOOP <- TRUE
-    x <- as.data.frame(x)
-    if (nrow(x) > maxobservations) x <- x[sample(1:nrow(x), maxobservations), ]
-    x <- na.omit(x)
-    exc <- c()
-    while (LOOP) {
-        xcor <- abs(cor(x, method = method))
-        mx <- maxCor(xcor)
-        if (xcor[mx[1], mx[2]] >= th) {
-            w1 <- which(colnames(xcor) == mx[1])
-            w2 <- which(rownames(xcor) == mx[2])
-            v <- vif2(x, c(w1, w2))
-            ex <- mx[which.max(v[mx])]
-            exc <- c(exc, ex)
-            x <- as.data.frame(x[, -which(colnames(x) == ex)])
-            if (ncol(x) == 1) {
-                LOOP <- FALSE
-            }
-        } else {
-            LOOP <- FALSE
-        }
+  
+  if (is.null(method) || !method %in% c("pearson", "kendall", "spearman")) method <- "pearson"
+  x <- as.data.frame(x)
+  
+  LOOP <- TRUE
+  if (nrow(x) > maxobservations) x <- x[sample(1:nrow(x), maxobservations), ]
+  x <- na.omit(x)
+  exc <- c()
+  while (LOOP) {
+    xcor <- abs(cor(x, method = method))
+    mx <- maxCor(xcor)
+    if (xcor[mx[1], mx[2]] >= th) {
+      w1 <- which(colnames(xcor) == mx[1])
+      w2 <- which(rownames(xcor) == mx[2])
+      v <- vif2(x, c(w1, w2))
+      ex <- mx[which.max(v[mx])]
+      exc <- c(exc, ex)
+      x <- as.data.frame(x[, -which(colnames(x) == ex)])
+      if (ncol(x) == 1) {
+        LOOP <- FALSE
+      }
+    } else {
+      LOOP <- FALSE
     }
-    exc
+  }
+  exc
 }
 
 # adapted and corrected from usdm package (https://github.com/cran/usdm/blob/master/R/vif.R)
 vif.step <- function(x, th = 10, maxobservations = 5000) {
-    if (nlayers(x) == 1) stop("The Raster object should have at least two layers!")
-    LOOP <- TRUE
-    x <- as.data.frame(x)
-    x <- na.omit(x)
-    if (nrow(x) > maxobservations) x <- x[sample(1:nrow(x), maxobservations), ]
-    exc <- c()
-    while (LOOP) {
-        v <- vif(x)
-        if (v[which.max(v)] >= th) {
-            ex <- names(v[which.max(v)])
-            exc <- c(exc, ex)
-            x <- x[, -which(colnames(x) == ex)]
-            if (ncol(x) == 1) {
-                LOOP <- FALSE
-            }
-        } else {
-            LOOP <- FALSE
-        }
+  LOOP <- TRUE
+  x <- as.data.frame(x)
+  x <- na.omit(x)
+  if (nrow(x) > maxobservations) x <- x[sample(1:nrow(x), maxobservations), ]
+  exc <- c()
+  while (LOOP) {
+    v <- vif(x)
+    if (v[which.max(v)] >= th) {
+      ex <- names(v[which.max(v)])
+      exc <- c(exc, ex)
+      x <- x[, -which(colnames(x) == ex)]
+      if (ncol(x) == 1) {
+        LOOP <- FALSE
+      }
+    } else {
+      LOOP <- FALSE
     }
-
-    exc
-}
-
-correlation <- function(raster, plot = TRUE) {
-    x <- as.data.frame(raster)
-    corx <- cor(x, use = "complete.obs")
-
-    if (plot) {
-        corrplot::corrplot(corx, tl.col = "black")
-    }
-    return(corx)
+  }
+  
+  exc
 }

@@ -135,7 +135,7 @@ load_predictors <- function(from_tif = T,
     
     cube_args_nc <- append(cube_args, list(layers = nc_names, 
                                         srs.cube = srs.cube, use.obs = F, 
-                                        bbox = bbox_wgs84))
+                                        bbox = bbox))
     output <- do.call(load_cube, cube_args_nc)
     output <- gdalcubes::filter_geom(output,  sf::st_geometry(sf::st_as_sf(mask), srs = srs.cube))
     

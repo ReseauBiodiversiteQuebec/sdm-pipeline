@@ -72,42 +72,8 @@ project_coords <- function(xy, lon = "lon", lat = "lat", proj.from, proj.to = NU
 }
 
 
-#' @name create_density_plots
-#' @param xy data frame, containing the coordinates to reproject
-#' @param lon string, name of the longitude column
-#' @param lat string, name of the latitude column
-#' @param proj.from character, initial projection of the xy coordinates
-#' @param proj.to character, target projection
-#' @import ggplot2
-#' @return spatial points in the proj.to projection
-#' @export
-create_density_plots <- function(df, factors = NULL, export = T, path = "./density_plot.pdf") {
 
-  df <- df %>% dplyr::mutate_at(.vars = factors, factor)
 
-  i <- 1
-  a <- list()
-  for (var in names(df)[-which(names(df) %in% c("pa", "lon", "lat", factors))]) {
-    
-    a[[i]] <- plot_density_cont(df, var)
-    i <- i + 1
-
-  }
-  j <- 1
-  for (f in factors) {
-    
-    a[[length(a)+j]] <- plot_density_cat(df, f)
-    
-  }
-
-  p <- do.call(ggpubr::ggarrange, c(a[1:length(a)],  ncol = 3, nrow = 4))
-
-  if (export){
-  ggsave(path)
-  }
-
-  return(p)
-}
 
 #' @name points_to_bbox
 #' @param xy data frame, containing the coordinates to reproject
@@ -166,6 +132,38 @@ shp_to_bbox <- function(shp, proj.from = NULL, proj.to = NULL) {
   bbox
 }
 
+#' @name create_density_plots
+#' @param xy data frame, containing the coordinates to reproject
+#' @param lon string, name of the longitude column
+#' @param lat string, name of the latitude column
+#' @param proj.from character, initial projection of the xy coordinates
+#' @param proj.to character, target projection
+#' @import ggplot2
+#' @return spatial points in the proj.to projection
+#' @export
+create_density_plots <- function(df, factors = NULL, export = T, path = "./density_plot.pdf") {
+
+  df <- df %>% dplyr::mutate_at(.vars = factors, factor)
+  i <- 1
+  a <- list()
+  for (var in names(df)[-which(names(df) %in% c("pa", 
+                                                "lon", "lat", factors))]) {
+    a[[i]] <- plot_density_cont(df, var)
+    i <- i + 1
+  }
+  j <- 1
+  for (f in factors) {
+    a[[length(a) + j]] <- plot_density_cat(df, f)
+  }
+  p <- do.call(ggpubr::ggarrange, c(a[1:length(a)], ncol = 2, 
+                                    nrow = ceiling(length(a)/2)))
+  if (export) {
+    ggsave(path)
+  }
+  return(p)
+}
+
+
 plot_density_cont <- function(df, var) {
   vars <- c("pa", var)
   df <- df %>% dplyr::select(dplyr::all_of(vars))
@@ -176,13 +174,12 @@ plot_density_cont <- function(df, var) {
     dplyr::summarise_at(all_of(var), list(name = mean))
   
   
-  p <- ggplot2::ggplot(df, aes(x = .data[[var]], fill = pa)) +
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data[[var]], fill = pa)) +
     ggplot2::geom_density(alpha = 0.4)
   # Add mean lines
-  p <- p + ggplot2::geom_vline(data = mu, aes(xintercept = name, color = pa),
-                   linetype = "dashed")
+  p <- p + ggplot2::geom_vline(data = mu, ggplot2::aes(xintercept = name, color = pa),
+                               linetype = "dashed") +
+    ggplot2::theme(legend.position="none")
   
   return(p)
-  
 }
-

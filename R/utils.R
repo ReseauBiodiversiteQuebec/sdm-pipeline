@@ -28,6 +28,7 @@ predictors <- terra::crop(predictors, mask)
 #' @param mask, a vector file, either from raster or terra format
 #' @return the predictors raster cropped and masked by mask, in terra format
 #' @import dplyr
+#' @export
 create_projection <- function(obs, lon, lat, proj.from, 
  proj.to, new.lon = NULL, new.lat = NULL) {
   

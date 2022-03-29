@@ -2,7 +2,7 @@
 #' @param mask, a vector file, either from raster or terra format
 #' @return the predictors raster cropped and masked by mask, in terra format
 #' @import terra
-
+#' @export
 fast_crop <- function(predictors,
                        mask) {
   

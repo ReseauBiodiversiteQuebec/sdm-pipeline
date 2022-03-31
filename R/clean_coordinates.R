@@ -395,7 +395,7 @@ cc_env_out <- function(x,
   
   df_pred <- terra::extract(predictors,
                             dplyr::select(x, all_of(c(lon, lat)))
-  ) 
+  ) %>% data.frame()
   
 if (is.null(cols)) {
   cols <- names(predictors)

@@ -98,3 +98,40 @@ bbox.wgs84 <- sf::st_bbox(bbox.proj,
   return(cube)
 }
 
+extract_cube_values <- function(cube, df, lon, lat, proj) {
+  
+  value_points <- gdalcubes::extract_geom(cube, sf::st_as_sf(df, coords = c(lon, lat),
+                                                                      crs = proj)) 
+  
+  df <- df %>% dplyr::mutate(FID = as.integer(rownames(df)))
+  df.vals <- dplyr::right_join(df, value_points, by = c("FID")) %>%
+       dplyr::select(-FID, -time)
+  return(df.vals)
+  
+}
+
+cube_to_raster <- function(cube, format = "raster") {
+  # Transform to a star object
+  cube.xy <- cube %>%
+    stars::st_as_stars()
+  
+
+  # We remove the temporal dimension
+  cube.xy <- cube.xy %>% abind::adrop(c(F,F,T))
+  
+  # Conversion to a spatial object
+  
+  if (format == "raster") {
+    # Raster format
+    cube.xy <- raster::stack(as(cube.xy, "Spatial"))
+    
+  } else {
+    # Terra format
+    cube.xy <- terra::rast(cube.xy)
+  }
+  # If not, names are concatenated with temp file names
+  names(cube.xy) <- names(cube)
+  
+  cube.xy
+  
+}

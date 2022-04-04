@@ -137,8 +137,16 @@ dismo::response(ENMeval::eval.models(mod)[[param]]) }
 #' @return spatial points
 #' @import dplyr dismo
 #' @export
-predict_maxent <- function(mod, algorithm, param, predictors, type = "cloglog") {
-      
+predict_maxent <- function(mod, algorithm, param, predictors, type = "cloglog", mask = NULL) {
+  if (inherits(predictors, "cube")) {
+    predictors <- cube_to_raster(predictors, format = "raster")
+  }
+  if (!is.null(mask)) predictors <- fast_crop(predictors, mask)
+  
+  if (inherits(predictors, "spatRaster")) {
+    predictors <- raster::stack(predictors)
+  }
+
       if (raster::nlayers(mod@predictions) > 0 ) {
  
           pred_raster <- mod@predictions[[param]]

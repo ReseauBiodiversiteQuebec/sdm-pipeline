@@ -26,49 +26,49 @@
 #' @export
 
 clean_coordinates <- function(x,
-                             predictors = NULL,
-                             covars = NULL,
-                             unique_id = "id",
-                             lon = "lon", 
-                             lat = "lat", 
-                             species_col = "scientificName",
-                             srs = NULL,
-                             spatial.res = NULL,
-                             tests = c( 
-                               "equal",
-                               "zeros", 
-                               "duplicates", 
-                               "same_pixel",
-                               "capitals", 
-                               "centroids",
-                               "seas", 
-                               "urban",
-                               "gbif", 
-                               "institutions",
-                               "env"
-                             ),
-                             capitals_rad = 10000,
-                             centroids_rad = 1000, 
-                             centroids_detail = "both", 
-                             inst_rad = 100, 
-                             range_rad = 0,
-                             zeros_rad = 0.5,
-                             threshold_env = 0.5,
-                             predictors_env = NULL,
-                             country_ref = NULL,
-                             capitals_ref = NULL, 
-                             centroids_ref = NULL, 
-                             inst_ref = NULL, 
-                             range_ref = NULL,
-                             seas_ref = NULL, 
-                             seas_scale = 10,
-                             additions = NULL,
-                             urban_ref = NULL, 
-                             verbose = TRUE, 
-                             species_name = NULL,
-                             report = T,
-                             dir = getwd(),
-                             value = "all") {
+                              predictors = NULL,
+                              cube = NULL,
+                              unique_id = "id",
+                              lon = "lon", 
+                              lat = "lat", 
+                              species_col = "scientificName",
+                              srs = NULL,
+                              spatial_res = NULL,
+                              tests = c( 
+                                "equal",
+                                "zeros", 
+                                "duplicates", 
+                                "same_pixel",
+                                "capitals", 
+                                "centroids",
+                                "seas", 
+                                "urban",
+                                "gbif", 
+                                "institutions",
+                                "env"
+                              ),
+                              capitals_rad = 10000,
+                              centroids_rad = 1000, 
+                              centroids_detail = "both", 
+                              inst_rad = 100, 
+                              range_rad = 0,
+                              zeros_rad = 0.5,
+                              threshold_env = 0.5,
+                              predictors_env = NULL,
+                              country_ref = NULL,
+                              capitals_ref = NULL, 
+                              centroids_ref = NULL, 
+                              inst_ref = NULL, 
+                              range_ref = NULL,
+                              seas_ref = NULL, 
+                              seas_scale = 10,
+                              additions = NULL,
+                              urban_ref = NULL, 
+                              verbose = TRUE, 
+                              species_name = NULL,
+                              report = T,
+                              dir = getwd(),
+                              value = "all") {
   # check function arguments
   match.arg(centroids_detail, choices = c("both", "country", "provinces"))
   
@@ -82,10 +82,10 @@ clean_coordinates <- function(x,
   # If proj is not lon/lat, transform coordinates to lon/lat to ensure further tests
   
   x <- create_projection(x, lon, lat,
-                           proj.from = srs,
-                           proj.to = "EPSG:4326", 
-                           new.lon = "decimalLongitude",
-                           new.lat = "decimalLatitude")
+                         proj.from = srs,
+                         proj.to = "EPSG:4326", 
+                         new.lon = "decimalLongitude",
+                         new.lat = "decimalLatitude")
   
   # Run tests Validity, check if coordinates fit to lat/long system, this has
   # to be run all the time, as otherwise the other tests don't work
@@ -105,16 +105,23 @@ clean_coordinates <- function(x,
     
     presvals <- terra::extract(predictors, dplyr::select(x, all_of(c(lon, lat ))) %>%
                                  data.frame()) 
+    comp <-  complete.cases(presvals)
+    x <-  x[comp, ]
+    presvals <-  presvals[comp, ]
+    covars <- names(predictors)
     
   } else {
+    presvals <- extract_cube_values(cube, x, "lon", "lat", proj_to)
+    x <- dplyr::right_join(x, dplyr::select(presvals, dplyr::all_of(c(unique_id))), 
+                           by = c(unique_id)) 
     
-    presvals <- dplyr::select(x, dplyr::all_of(c(covars))) 
-    
+    covars <- names(cube)
+
   }
   
-  comp <-  complete.cases(presvals)
-  x <-  x[comp, ]
-  
+
+  presvals <- dplyr::select(presvals, 
+                            dplyr::all_of(c(covars))) %>% data.frame()
   if (nrow(x) == 0) stop("All occurrence points are outside the predictor variable rasters")
   message(sprintf("Removed %s records with no environmental data.",nrow(presvals) - nrow(x)))
   
@@ -167,14 +174,12 @@ clean_coordinates <- function(x,
       sp::coordinates(xy) <-  c(lon, lat)
       sp::proj4string(xy) <- srs
       
-      mask <- terra::rast(raster::raster(xy, resolution = spatial.res))
+      mask <- terra::rast(raster::raster(xy, resolution = spatial_res))
       
     }
-    
-    
-    mask <- predictors[[1]]
+
     cell <- terra::cellFromXY(mask, 
-     xy <- as.matrix(dplyr::select(x, dplyr::all_of(c(lon, lat)))))
+                              xy <- as.matrix(dplyr::select(x, dplyr::all_of(c(lon, lat)))))
     dup <- duplicated(cell)
     out$pixel <- !dup
     if (verbose) {
@@ -235,10 +240,7 @@ clean_coordinates <- function(x,
   
   ## Environmental outliers
   if ("env" %in% tests){
-    out$env <- cc_env_out(x, 
-                          lon = "lon", 
-                          lat = "lat", 
-                          predictors = predictors,
+    out$env <- cc_env_out(presvals,
                           cols = predictors_env,
                           threshold = threshold_env,
                           value = "flagged",
@@ -285,14 +287,14 @@ clean_coordinates <- function(x,
   
   
   repo <- dplyr::bind_cols(out %>%
-                      dplyr::summarise(across(everything(), ~ sum(!.x, na.rm = TRUE))),
-                    nb_init = length(suma),
-                    nb_flagged = sum(!suma,
-                                     na.rm = TRUE
-                    ),
-                    EQ = round(
-                      sum(!suma, na.rm = TRUE) / length(suma), 2
-                    ))
+                             dplyr::summarise(across(everything(), ~ sum(!.x, na.rm = TRUE))),
+                           nb_init = length(suma),
+                           nb_flagged = sum(!suma,
+                                            na.rm = TRUE
+                           ),
+                           EQ = round(
+                             sum(!suma, na.rm = TRUE) / length(suma), 2
+                           ))
   
   
   
@@ -316,8 +318,60 @@ clean_coordinates <- function(x,
   
   switch(value, clean = return(clean.obs), flagged = return(flagged.obs),
          all = return(list("flagged" = flagged.obs, "clean" = clean.obs, "report" = repo)))
-
+  
 }
+
+# Impoirted and modified from CoordinateCleaner
+cc_urb <- function (x, lon = "decimallongitude", lat = "decimallatitude", 
+                    ref = NULL, value = "clean", verbose = TRUE) {
+  match.arg(value, choices = c("clean", "flagged"))
+  if (verbose) {
+    message("Testing urban areas")
+  }
+  if (is.null(ref)) {
+    message("Downloading urban areas via rnaturalearth")
+    ref <- try(suppressWarnings(rnaturalearth::ne_download(scale = "medium", 
+                                                           type = "urban_areas")),
+               silent = TRUE)
+    if (class(ref) == "try-error") {
+      warning(sprintf("Gazetteer for urban areas not found at\n%s", 
+                      rnaturalearth::ne_file_name(scale = "medium", 
+                                                  type = "urban_areas", full_url = TRUE)))
+      warning("Skipping urban test")
+      switch(value, clean = return(x), flagged = return(rep(NA, 
+                                                            nrow(x))))
+    }
+    sp::proj4string(ref) <- ""
+  }
+  else {
+    if (!any(is(ref) == "Spatial")) {
+      ref <- as(ref, "Spatial")
+    }
+    ref <- reproj(ref)
+  }
+  wgs84 <- "+proj=longlat +datum=WGS84 +no_defs"
+  dat <- sp::SpatialPoints(x[, c(lon, lat)], proj4string = sp::CRS(wgs84))
+  limits <- raster::extent(dat) + 1
+  ref <- raster::crop(ref, limits)
+  
+  if (is.null(ref)) {
+    out <- rep(TRUE, nrow(x))
+  }
+  else {
+    sp::proj4string(ref) <- wgs84
+    out <- is.na(sp::over(x = dat, y = ref)[, 1])
+  }
+  if (verbose) {
+    if (value == "clean") {
+      message(sprintf("Removed %s records.", sum(!out)))
+    }
+    else {
+      message(sprintf("Flagged %s records.", sum(!out)))
+    }
+  }
+  switch(value, clean = return(x[out, ]), flagged = return(out))
+}
+
 
 # Impoirted and modified from CoordinateCleaner
 cc_urb <- function (x, lon = "decimallongitude", lat = "decimallatitude", 
@@ -383,34 +437,25 @@ cc_urb <- function (x, lon = "decimallongitude", lat = "decimallatitude",
 #' @return df increased by n variables corresponding to the result of the Reverse Jackknife procedure for each tested variable in cols
 #' @import biogeo
 
-cc_env_out <- function(x, 
-                       lon = "decimallongitude", 
-                       lat = "decimallatitude", 
-                       predictors,
+cc_env_out <- function(presvals,
                        cols = NULL,
                        threshold = 0.8, value = "clean",
                        verbose = TRUE) {
   
   message(sprintf("Testing environmental outliers."))
+  if(is.null(cols)) cols <- names(presvals)
   
-  df_pred <- terra::extract(predictors,
-                            dplyr::select(x, all_of(c(lon, lat)))
-  ) %>% data.frame()
-  
-if (is.null(cols)) {
-  cols <- names(predictors)
-}
   nb_var <- floor(threshold * length(cols))
   
-  out <- dplyr::select(df_pred, all_of(cols)
-            ) %>%  dplyr::mutate(dplyr::across(everything(), flag_env_outlier)
-    ) %>% dplyr::rename_with(~paste0(.x, "_jn.out")
-    ) %>% dplyr::mutate(sumOutl = rowSums(.==FALSE) 
-    ) %>% dplyr::mutate(flagged = ifelse(sumOutl >= nb_var, FALSE, TRUE)
-    ) %>% dplyr::select(flagged)
+  out <- dplyr::select(presvals, all_of(cols)
+  ) %>%  dplyr::mutate(dplyr::across(everything(), flag_env_outlier)
+  ) %>% dplyr::rename_with(~paste0(.x, "_jn.out")
+  ) %>% dplyr::mutate(sumOutl = rowSums(.==FALSE) 
+  ) %>% dplyr::mutate(flagged = ifelse(sumOutl >= nb_var, FALSE, TRUE)
+  ) %>% dplyr::select(flagged)
   
   nb_flagged <- nrow(out %>% dplyr::filter(flagged == FALSE))
-
+  
   if (verbose) {
     if(value == "clean"){
       message(sprintf("Removed %s records.", nb_flagged))
@@ -421,7 +466,7 @@ if (is.null(cols)) {
   }
   
   switch(value, clean = return(x[out, ]), flagged = return(out$flagged))
-
+  
 }
 
 #' @param x, a vector of values to test with the Reverse Jackknife procedure

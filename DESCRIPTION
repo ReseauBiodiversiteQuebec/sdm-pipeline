@@ -31,7 +31,6 @@ Remotes:
     github::ManuelHentschel/vscDebugger,
     IRkernel/IRkernel
 Imports: 
-    
     devtools (>= 2.4.3),
     raster,
     terra (>= 1.4.20),

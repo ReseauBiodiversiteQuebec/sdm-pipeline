@@ -55,7 +55,7 @@ load_observations <-
     # SPATIAL RANGE
     if (!is.null(extent_shp)) {
       bbox <-
-        shp_to_bbox(shp, proj.from = proj_shp, proj.to = "EPSG:4326")
+        shp_to_bbox(shp, proj_from = proj_shp, proj_to = "EPSG:4326")
       if (is.null(bbox)) stop()
       extent_wkt <- bbox_to_wkt(bbox)
     } else if (!is.null(bbox) ||

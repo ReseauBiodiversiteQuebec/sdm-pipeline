@@ -26,7 +26,7 @@ load_cube <- function(stac_path =
     
     if (inherits(obs, "data.frame")) {
       # Reproject the obs to the data cube projection
-      proj.pts <- project_coords(obs, lon = lon, lat = lat, proj.from = srs_cube)
+      proj.pts <- project_coords(obs, lon = lon, lat = lat, proj_from = srs_cube)
       
     } else {
       proj.pts <- obs
@@ -37,7 +37,7 @@ load_cube <- function(stac_path =
 
     
     # Create the bbxo (WGS84 projection)
-    bbox.wgs84 <- points_to_bbox(proj.pts, buffer = buffer_box, proj.to ="+proj=longlat +datum=WGS84")
+    bbox.wgs84 <- points_to_bbox(proj.pts, buffer = buffer_box, proj_to ="+proj=longlat +datum=WGS84")
     
   } else {
     

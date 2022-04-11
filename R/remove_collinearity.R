@@ -4,13 +4,13 @@
 #' or "kendall". "vif.cor" and "vif.step" use the Variance Inflation factor and the pearson correlation, more details
 #' here https://www.rdocumentation.org/packages/usdm/versions/1.1-18/topics/vif. If your variables are skewed or have outliers 
 #' (e.g. when working with precipitation variables) you should favour the Spearman or Kendall methods.
-#' @param method.cor.vif, the correlation method to be used with "vif.cor" method. "pearson", "spearman"
+#' @param method_cor_vif, the correlation method to be used with "vif.cor" method. "pearson", "spearman"
 #' or "kendall".
 #' @param mask, a 
-#' @param sample, boolean value. If TRUE, sample a number of points equal to nb.points before evaluating collinearity
-#' @param nb.points, a numeric value. Only used if sample.points = TRUE. The number of sampled points from the raster.
-#' @param cutoff.cor, a numeric value corresponding to the maximum threshold of linear correlation (for "vif.cor", "pearson", "spearman").
-#' @param cutoff.vif, a numeric value corresponding to the maximum threshold of VIF (only used for method "vif.step").
+#' @param sample, boolean value. If TRUE, sample a number of points equal to nb_points before evaluating collinearity
+#' @param nb_points, a numeric value. Only used if sample.points = TRUE. The number of sampled points from the raster.
+#' @param cutoff_cor, a numeric value corresponding to the maximum threshold of linear correlation (for "vif.cor", "pearson", "spearman").
+#' @param cutoff_vif, a numeric value corresponding to the maximum threshold of VIF (only used for method "vif.step").
 #' @param export, boolean value. If TRUE, the list of selected variables and the correlation matrix will be saved.
 #' @param title_export, a string. If export is TRUE, title of the correlation matrix.
 #' @param path, a string. If export is TRUE, path to save the corrrelation matrix and list of uncorrelated variables.

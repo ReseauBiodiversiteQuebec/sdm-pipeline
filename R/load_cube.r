@@ -2,19 +2,19 @@ load_cube <- function(stac_path =
                         "http://io.biodiversite-quebec.ca/stac/",
                       limit = 5000,
                       collections = c('chelsa-clim'),
-                      use.obs = T,
+                      use_obs = T,
                       obs = NULL,
                       lon = "lon",
                       lat = "lat",
                       buffer_box = 0,
                       bbox = NULL,
                       layers = NULL,
-                      srs.cube = "EPSG:32198", 
+                      srs_cube = "EPSG:32198", 
                       t0 = "1981-01-01", 
                       t1 = "1981-01-01",
                       left = -2009488, right = 1401061,  bottom = -715776, top = 2597757,
-                      spatial.res = 2000,
-                      temporal.res  = "P1Y", 
+                      spatial_res = 2000,
+                      temporal_res  = "P1Y", 
                       aggregation = "mean",
                       resampling = "near") {
   
@@ -22,11 +22,11 @@ load_cube <- function(stac_path =
   s <- rstac::stac(stac_path)
   
   # use observations to create the bbox and extent
-  if (use.obs) {
+  if (use_obs) {
     
     if (inherits(obs, "data.frame")) {
       # Reproject the obs to the data cube projection
-      proj.pts <- project_coords(obs, lon = lon, lat = lat, proj.from = srs.cube)
+      proj.pts <- project_coords(obs, lon = lon, lat = lat, proj.from = srs_cube)
       
     } else {
       proj.pts <- obs
@@ -50,7 +50,7 @@ load_cube <- function(stac_path =
 
 
 bbox.wgs84 <- sf::st_bbox(bbox.proj,  
-            crs = srs.cube) %>%
+            crs = srs_cube) %>%
   sf::st_as_sfc() %>%
   sf::st_transform(crs = 4326) %>% sf::st_bbox()
 
@@ -89,9 +89,9 @@ bbox.wgs84 <- sf::st_bbox(bbox.proj,
   # Creates an image collection
   st <- gdalcubes::stac_image_collection(it_obj$features, asset_names = layers) 
   
-  v <- gdalcubes::cube_view(srs = srs.cube,  extent = list(t0 = t0, t1 = t1,
+  v <- gdalcubes::cube_view(srs = srs_cube,  extent = list(t0 = t0, t1 = t1,
                                                            left = left, right = right,  top = top, bottom = bottom),
-                            dx = spatial.res, dy = spatial.res, dt = temporal.res, aggregation = aggregation, resampling = resampling)
+                            dx = spatial_res, dy = spatial_res, dt = temporal_res, aggregation = aggregation, resampling = resampling)
   gdalcubes::gdalcubes_options(parallel = 4)
   cube <- gdalcubes::raster_cube(st, v)
   
@@ -105,7 +105,7 @@ extract_cube_values <- function(cube, df, lon, lat, proj) {
   
   df <- df %>% dplyr::mutate(FID = as.integer(rownames(df)))
   df.vals <- dplyr::right_join(df, value_points, by = c("FID")) %>%
-       dplyr::select(-FID, -time)
+       dplyr::select(-FID)
   return(df.vals)
   
 }

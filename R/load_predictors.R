@@ -13,27 +13,26 @@
 #' @param proj, a string , proj if raster layers has to be reprojected
 #' @param mask, a polygon to crop the raster
 #' @param sample, boolean value. If TRUE, sample a number of points equal to nb.points before evaluating collinearity
-#' @param nb.points, a numeric value. Only used if sample.points = TRUE. The number of sampled points from the raster.
-#' @param cutoff.cor, a numeric value corresponding to the maximum threshold of linear correlation (for "vif.cor", "pearson", "spearman").
-#' @param cutoff.vif, a numeric value corresponding to the maximum threshold of VIF (only used for method "vif.step").
+#' @param nb_points, a numeric value. Only used if sample.points = TRUE. The number of sampled points from the raster.
+#' @param cutoff_cor, a numeric value corresponding to the maximum threshold of linear correlation (for "vif.cor", "pearson", "spearman").
+#' @param cutoff_vif, a numeric value corresponding to the maximum threshold of VIF (only used for method "vif.step").
 #' @param export, boolean value. If TRUE, the list of selected variables and the correlation matrix will be saved in nonCollinearDir.
 #' @param loadNonCollinear, boolean, if TRUE, a list of non-collinear layers is used to subset the raster stack (loaded from nonCollinearDir)
 #' @param nonCollinearDir, string, path to the folder export or impot the list of non-collinear layers (if loadNonCollinear = T)
 #' @return a raster stack of variables not intercorrelated
 #' @import terra raster
 #' @export 
-load_predictors <- function(from_tif = T,
-                            from_cube = F,
+load_predictors <- function(source = "from_cube",
                             cube_args = list(stac_path = "http://io.biodiversite-quebec.ca/stac/",
                                              limit = 5000, 
                                              collections = c("chelsa-clim"),     
                                              t0 = "1981-01-01",
                                              t1 = "1981-01-01",
-                                             spatial.res = 1000, # in meters
-                                             temporal.res = "P1Y",
+                                             spatial_res = 1000, # in meters
+                                             temporal_res = "P1Y",
                                              aggregation = "mean",
                                              resampling = "near",
-                                             buffer_box = 200000),
+                                             buffer_box = NULL),
                             predictors_dir = NULL,
                             subset_layers = NULL,
                             remove_collinear = T,
@@ -47,7 +46,7 @@ load_predictors <- function(from_tif = T,
                             cutoff_vif = 3,
                             export = TRUE,
                             ouput_dir = NULL,
-                            as.list = T) {
+                            as_list = T) {
   
   
   if (!method %in% c("none", "vif.cor", "vif.step", "pearson", "spearman", "kendall")) {
@@ -58,10 +57,10 @@ load_predictors <- function(from_tif = T,
     cutoff_cor <- 0.8
   }
   
-  if (from_tif) {
+  if (source == "from_tif") {
     
     if (!is.null(subset_layers)) {
-      files <- sprintf("%s%s.tif", predictors_dir, subset_layers) 
+      files <- sprintf("%s/%s.tif", predictors_dir, subset_layers) 
     } else {
       files <- list.files(predictors_dir, pattern = "*.tif$", full.names = TRUE)
       
@@ -86,19 +85,24 @@ load_predictors <- function(from_tif = T,
       
     }
   } else {
-    
-    bbox <-  shp_to_bbox(mask)
-    if (is.null(new_proj)) {
-      srs.cube <- sf::st_crs(mask)$proj4string
-    } else {
-      srs.cube <- new_proj   
-    }
-    cube_args_c <- append(cube_args, list(layers = subset_layers, 
-                                          srs.cube = srs.cube, use.obs = F, 
+    if (inherits(mask, "bbox")) {
+     
+       bbox <- mask
+       mask <- mask %>%
+       sf::st_as_sfc() 
+
+       } else {
+  
+        bbox <- shp_to_bbox(mask)
+       }
+ 
+     cube_args_c <- append(cube_args, list(layers = subset_layers, 
+                                          srs.cube = new_proj, use.obs = F, 
                                           bbox = bbox))
-    
+    print(cube_args_c)
     all_predictors <- do.call(load_cube, cube_args_c)
-    all_predictors <- gdalcubes::filter_geom(all_predictors,  sf::st_geometry(sf::st_as_sf(mask), srs = srs.cube))
+
+    all_predictors <- gdalcubes::filter_geom(all_predictors,  sf::st_geometry(sf::st_as_sf(mask), srs = new_proj))
   }
   nc_names <- names(all_predictors)
   # Selection of non-collinear predictors
@@ -119,26 +123,28 @@ load_predictors <- function(from_tif = T,
   }                               
   
   
-  if (as.list) {
+  if (as_list) {
     output <- nc_names
     
   } else {
-    if (from_tif) {
+
+    if (source == "from_tif") {
       output <- terra::subset(all_predictors, nc_names)
       
     } else {
       
       cube_args_nc <- append(cube_args, list(layers = nc_names, 
-                                             srs.cube = srs.cube, use.obs = F, 
+                                             srs.cube = new_proj, use.obs = F, 
                                              bbox = bbox))
       output <- do.call(load_cube, cube_args_nc)
-      output <- gdalcubes::filter_geom(output,  sf::st_geometry(sf::st_as_sf(mask), srs = srs.cube))
+      output <- gdalcubes::filter_geom(output,  sf::st_geometry(sf::st_as_sf(mask), srs = new_proj))
       
       
     }
   }
   return(output)
 }
+
 
 extract_gdal_cube <- function(cube, n_sample = 5000, simplify = T) {
   

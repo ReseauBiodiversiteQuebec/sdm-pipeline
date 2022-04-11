@@ -97,7 +97,7 @@ load_predictors <- function(source = "from_cube",
        }
  
      cube_args_c <- append(cube_args, list(layers = subset_layers, 
-                                          srs.cube = new_proj, use.obs = F, 
+                                          srs.cube = new_proj, use_obs = F, 
                                           bbox = bbox))
     print(cube_args_c)
     all_predictors <- do.call(load_cube, cube_args_c)
@@ -111,7 +111,7 @@ load_predictors <- function(source = "from_cube",
       env_df <- sample_spatial_obj(all_predictors, nb_points = nb_points)
     }
     
-    nc_names <-detect_collinearity(env_df,
+    nc_names <- detect_collinearity(env_df,
                                    method = method ,
                                    method_cor_vif = method_cor_vif,
                                    cutoff_cor = cutoff_cor,
@@ -134,7 +134,7 @@ load_predictors <- function(source = "from_cube",
     } else {
       
       cube_args_nc <- append(cube_args, list(layers = nc_names, 
-                                             srs.cube = new_proj, use.obs = F, 
+                                             srs_cube = new_proj, use_obs = F, 
                                              bbox = bbox))
       output <- do.call(load_cube, cube_args_nc)
       output <- gdalcubes::filter_geom(output,  sf::st_geometry(sf::st_as_sf(mask), srs = new_proj))

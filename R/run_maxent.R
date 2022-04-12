@@ -67,7 +67,8 @@ run_maxent <- function(presence.bg, with_raster = F,
 #' @import dplyr 
 #' @export
 select_param <- function(res, method = "AIC", auc_min = 0, list = T) {
-  
+  if (nrow(res) > 1) {
+ 
   res <- res %>% 
         filter(auc.val.avg >= auc_min)
   if (nrow(res) == 0) {
@@ -87,7 +88,7 @@ select_param <- function(res, method = "AIC", auc_min = 0, list = T) {
       res <- res %>% filter(or.10p.avg == min(or.10p.avg))
     
     } 
- 
+ }
   if (list) {
     param <- list(res$fc, as.double(as.character(res$rm)))
   } else {
@@ -180,10 +181,10 @@ find_threshold <- function(sdm, occs, bg, type = "mtp"){
   
   if (type == "spse") {type <- "spec_sens"}
   #extract model estimated suitability for occurrence localities
-  occs_vals <- raster::extract(sdm, occs)
-  
+  occs_vals <- terra::extract(sdm, occs) %>% dplyr::select(-ID) %>% dplyr::pull(1)
+
   #extract model estimated suitability for background
-  bg_vals <- raster::extract(sdm, bg)
+  bg_vals <- terra::extract(sdm, bg)  %>% dplyr::select(-ID) %>% dplyr::pull(1)
   
   # taken from https://babichmorrowc.github.io/post/2019-04-12-sdm-threshold/
   

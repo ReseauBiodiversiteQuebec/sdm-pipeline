@@ -12,6 +12,7 @@ run_maxent <- function(presence.bg, with_raster = F,
                         algorithm = "maxnet",
                         factors = NULL,
                         predictors = NULL,
+                        covars = NULL,
                         partition_type = "crossvalidation",
                         nfolds = 5,
                         orientation_block = "lat_lon",
@@ -39,7 +40,8 @@ run_maxent <- function(presence.bg, with_raster = F,
     
     
   } else {
-    covars <- names(presence)[-which(names(presence) %in% c("id", "scientific_name",  "pa"))]
+    #covars <- names(presence)[-which(names(presence) %in% c("id", "scientific_name",  "pa"))]
+    covars <- c("lon", "lat", covars)
     ENMmodel <- ENMeval::ENMevaluate(occs = presence[,covars], 
                             bg = background[,covars],  
                             algorithm = algorithm,
@@ -179,12 +181,17 @@ predict_maxent <- function(mod, algorithm, param, predictors, type = "cloglog", 
 
 find_threshold <- function(sdm, occs, bg, type = "mtp"){
   
+  if(!inherits(sdm, "SpatRaster")) {
+    sdm <- terra::rast(sdm)
+  }
+  
   if (type == "spse") {type <- "spec_sens"}
   #extract model estimated suitability for occurrence localities
-  occs_vals <- terra::extract(sdm, occs) %>% dplyr::select(-ID) %>% dplyr::pull(1)
+  #occs_vals <- terra::extract(sdm, occs) 
+ occs_vals <- terra::extract(sdm, occs) %>% dplyr::select(-ID) %>% dplyr::pull(1)
 
   #extract model estimated suitability for background
-  bg_vals <- terra::extract(sdm, bg)  %>% dplyr::select(-ID) %>% dplyr::pull(1)
+  bg_vals <- terra::extract(sdm, bg) %>% dplyr::select(-ID) %>% dplyr::pull(1)
   
   # taken from https://babichmorrowc.github.io/post/2019-04-12-sdm-threshold/
   
@@ -208,8 +215,7 @@ find_threshold <- function(sdm, occs, bg, type = "mtp"){
 
   }
   
-
-  
+ 
   return(thresh)
 }
 
@@ -222,6 +228,7 @@ find_threshold <- function(sdm, occs, bg, type = "mtp"){
 #' @return spatial points
 #' @import dplyr dismo raster
 #' @export
+
 binarize_pred <- function(sdm, threshold) {
   sdm[sdm < threshold] <- NA
   sdm[sdm >= threshold] <- 1

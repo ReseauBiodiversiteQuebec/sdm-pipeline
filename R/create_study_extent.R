@@ -11,6 +11,7 @@ create_study_extent <- function(obs,
                               proj = proj,
                               method = "box",
                               dist_buffer = NULL,
+                              mask = NULL,
                               shapefile_path = NULL,
                               export = NULL,
                               path = NULL,
@@ -59,6 +60,13 @@ create_study_extent <- function(obs,
   } else if (method == "user_shapefile") {
     
     study_extent <- sf::st_read(shapefile_path) 
+  }
+  
+  study_extent <- as_Spatial(study_extent)
+  
+  if(!is.null(mask)) {
+    
+    study_extent <- terra::intersect(mask, terra::vect(study_extent))
   }
   
   return(study_extent)

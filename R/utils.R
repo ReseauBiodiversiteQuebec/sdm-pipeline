@@ -12,7 +12,7 @@ fast_crop <- function(predictors,
   }
   
   # convert into a SpatVector
- if (!inherits(mask, "SpatVectors")) {
+ if (!inherits(mask, "SpatVector")) {
     mask <- terra::vect(mask)
   }
 predictors <- terra::crop(predictors, mask)
@@ -74,8 +74,6 @@ project_coords <- function(xy, lon = "lon", lat = "lat", proj_from, proj_to = NU
 
 
 
-
-
 #' @name points_to_bbox
 #' @param xy data frame, containing the coordinates to reproject
 #' @param buffer integer, buffer to add around the observations
@@ -83,19 +81,18 @@ project_coords <- function(xy, lon = "lon", lat = "lat", proj_from, proj_to = NU
 #' @param proj_to character, target projection 
 #' @return a box extent
 points_to_bbox <- function(xy, buffer = 0, proj_from = NULL, proj_to = NULL) {
-  if (class(xy) != "SpatialPoints") {
+  if (!inherits(xy, "SpatialPoints")) {
     sp::coordinates(xy) <- colnames(xy)
     proj4string(xy) <- sp::CRS(proj_from)
   }
   bbox <-  sf::st_buffer(sf::st_as_sfc(sf::st_bbox(xy)), dist =  buffer)
   
-  if (!is.null(proj_to) ) {
+  if (!is.null(proj_to)) {
     bbox <- bbox  %>%
       sf::st_transform(crs = sp::CRS(proj_to))
   }
-  bbox <- c(sf::st_bbox(bbox)$xmin, sf::st_bbox(bbox)$xmax,
-            sf::st_bbox(bbox)$ymin, sf::st_bbox(bbox)$ymax)
-  bbox
+  
+  bbox %>% sf::st_bbox()
 }
 
 
@@ -166,9 +163,17 @@ create_density_plots <- function (df, factors = NULL, export = T, path = "./dens
 }
 
 
+#' @name plot_density_cont
+#' @param xy data frame, containing the coordinates to reproject
+#' @param lon string, name of the longitude column
+#' @param lat string, name of the latitude column
+#' @param proj_from character, initial projection of the xy coordinates
+#' @param proj_to character, target projection
+#' @import ggplot2
+#' @return spatial points in the proj_to projection
+#' @export
 
-
-plot_density_cont <- function(df, var) {
+plot_density_cont <- function(df, var, legend = T, y_limits = NULL, x_limits = NULL) {
   vars <- c("pa", var)
   df <- df %>% dplyr::select(dplyr::all_of(vars))
   df <- df[complete.cases(df), ]       
@@ -183,8 +188,12 @@ plot_density_cont <- function(df, var) {
   # Add mean lines
   p <- p + ggplot2::geom_vline(data = mu, ggplot2::aes(xintercept = name, color = pa),
                                linetype = "dashed") +
-    # ggplot2::theme(legend.position="none") + 
-    scale_y_continuous(labels = function(x) format(x, scientific = TRUE))
+    # scale_y_continuous(labels = function(x) format(x, scientific = TRUE), limits = c(0,0.8))  
+    scale_y_continuous(limits = y_limits) +
+    scale_x_continuous(limits = x_limits)
   
+  if(!legend) {
+    p <- p +ggplot2::theme(legend.position="none")  
+  }
   return(p)
 }

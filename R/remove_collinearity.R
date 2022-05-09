@@ -47,7 +47,7 @@ sample_spatial_obj <- function(obj_to_sample, nb_points = 5000) {
     env_df <- obj_to_sample
   }
   } else if (inherits(obj_to_sample, "cube")) {
-    env_df <- extract_gdal_cube(obj_to_sample, n_sample = nb_points, simplify = T)
+    env_df <- stacatalogue::extract_gdal_cube(obj_to_sample, n_sample = nb_points, simplify = T)
   }
     env_df <- setNames(data.frame(env_df), names_layers)
    message(paste0(nrow(env_df), " points randomly selected (excluding NA's)."))

@@ -34,6 +34,7 @@ Imports:
     devtools (>= 2.4.3),
     raster,
     terra (>= 1.4.20),
+    gdalcubes (>= 0.6.1),
     ggplot2,
     dplyr,
     virtualspecies,

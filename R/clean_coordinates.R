@@ -27,7 +27,6 @@
 
 clean_coordinates <- function(x,
                               predictors = NULL,
-                              cube = NULL,
                               unique_id = "id",
                               lon = "lon", 
                               lat = "lat", 
@@ -101,25 +100,29 @@ clean_coordinates <- function(x,
   
   ## Remove NA in predictors
   message("cleaning occurrences with no environmental data")
-  if (!is.null(predictors)) {
+  if (inherits(predictors, "SpatRaster")) {
     
     presvals <- terra::extract(predictors, dplyr::select(x, all_of(c(lon, lat ))) %>%
                                  data.frame()) 
     comp <-  complete.cases(presvals)
     x <-  x[comp, ]
     presvals <-  presvals[comp, ]
-    covars <- names(predictors)
     
-  } else {
-    presvals <- extract_cube_values(cube, x, "lon", "lat", proj_to)
-    x <- dplyr::right_join(x, dplyr::select(presvals, dplyr::all_of(c(unique_id))), 
-                           by = c(unique_id)) 
+  } else if (inherits(predictors, "cube")){
+    #presvals <- extract_cube_values(predictors, x, "lon", "lat", srs)
+
+    presvals <- gdalcubes::extract_geom(predictors, sf::st_as_sf(x, coords = c("lon", "lat"),
+                                                         crs = srs)) %>% dplyr::select(-time)
+
+    x <- x %>% dplyr::mutate(FID = as.integer(rownames(x)))
+    x <- dplyr::right_join(x, presvals, by = c("FID")) %>%
+       dplyr::select(-FID)
+    presvals <- presvals %>% dplyr::select(-FID)
     
-    covars <- names(cube)
 
   }
   
-
+  covars <- names(predictors)
   presvals <- dplyr::select(presvals, 
                             dplyr::all_of(c(covars))) %>% data.frame()
   if (nrow(x) == 0) stop("All occurrence points are outside the predictor variable rasters")
@@ -165,12 +168,14 @@ clean_coordinates <- function(x,
       message("Testing observations in the same pixel")
     }
     
-    if (!is.null(predictors)) {
+    if (inherits(predictors, "SpatRaster")) {
+    
       mask <- predictors[[1]]
       
     } else {
       
       xy <- dplyr::select(x, dplyr::all_of(c(lon, lat)))
+   
       sp::coordinates(xy) <-  c(lon, lat)
       sp::proj4string(xy) <- srs
       

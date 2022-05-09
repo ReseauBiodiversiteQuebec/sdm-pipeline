@@ -17,73 +17,21 @@ knitr::opts_chunk$set(
 ```{r}
 #library(sdmpipeline)
 devtools::load_all()
-```
-```{r}
-
-outputDir <- "C:/SDMpipeline"
-```
-###############
-# Covariates  #
-###############
-
-# load Quebec mask
-```{r}
-qbc_us_shp <- rgdal::readOGR(dsn = sprintf("%s/data",outputDir), layer = "shape_study_area_nolakes_nad83")
-```
-# load covariates
-```{r}
-
-layersDir <- paste0(outputDir, "/data/chelsa/") # where predictors variables are
-
-predDir <- "predictors_selection" # where list of non-collinear predictors will be saved
-dir.create(file.path(outputDir, predDir), showWarnings = FALSE) #dir.create() does not crash if the directory already exists}
-subset_layers <- c("bio1", "bio2", "bio3") #or dplyr::pull(read_csv(
-           # sprintf("%s/%s/%s/retained_predictor.csv",  outputDir, predDir),
-          #  col_names = FALSE
-          # ), X1)
-
-#proj <- terra::crs(predictors, proj = T)
-#print(names(predictors))
-```
-```{r}
-predictors_nc <- load_predictors(from_tif = F,
-                            from_cube = T,
-                            cube_args = list(stac_path = "http://io.biodiversite-quebec.ca/stac/",
-            limit = 5000, 
-            collections = c("chelsa-clim"),     
-            t0 = "1981-01-01",
-            t1 = "1981-01-01",
-            spatial.res = 1000, # in meters
-            temporal.res = "P1Y",
-            aggregation = "mean",
-            resampling = "near",
-            buffer_box = NULL),
-                          predictors_dir = NULL,
-                           subset_layers = c("bio1", "bio2", "bio4"),
-                           remove_collinear = T,
-                           method = "vif.cor",
-                           method_cor_vif = NULL,
-                           new_proj = NULL,
-                           mask = qbc_us_shp,
-                           sample = TRUE,
-                           nb_points = 50000,
-                           cutoff_cor = 0.7,
-                           cutoff_vif = 3,
-                           export = TRUE,
-                           ouput_dir = getwd(),
-                           as.list = T)
-
-```
-
-
-```{r}
-terra::plot(predictors[[1]])
-```
-
-# clean observations
-
-```{r}
+library(stacatalogue)
 library(rgbif)
+library(ggplot2)
+```
+Select the directory where to create the output.
+```{r}
+output_dir <- "C:/SDMpipeline"
+```
+
+# 1. Load observations
+
+
+```{r}
+
+proj <- "EPSG:6623"
 species <- "Glyptemys insculpta"
 gbifData <- rgbif::occ_data(scientificName = species, hasCoordinate = T, limit = 2000) 
 presence <- gbifData$data
@@ -93,37 +41,173 @@ presence <- presence %>% dplyr::select(key, species, decimalLongitude, decimalLa
       dplyr::mutate(id = as.double(id))
 
 presence <- create_projection(presence, lon = "decimalLongitude", lat = "decimalLatitude", 
-proj.from = "+proj=longlat +datum=WGS84", proj.to = proj, new.lon = "lon", new.lat = "lat") 
+proj_from = "+proj=longlat +datum=WGS84", proj_to = proj, new_lon = "lon", new_lat = "lat") 
+
+bbox <- points_to_bbox(dplyr::select(presence, lon, lat), proj_from = proj, buffer = 0)
+```
+
+
+
+# 2. Covariates  
+
+
+```{r}
+mask <- vect("C:/GitHub/sdm-pipeline/data/shape_study_area_nolakes_nad83.shp")
+```
+# Load covariates from local tif files
+
+As a first option, we choose to load predictors from local tif files (in the folder predictors_dir). When subset_layers is NULL, all the files from the predictors_dir folder will be loaded. They must be in the same projection system and have the same extent and resolution.
+
+```{r}
+predictors_dir <- "C:/Users/vals3103/Dropbox/Post-doc/data/environmental/out/chelsa"
+predictors <- load_predictors(source = "from_tif",
+                           predictors_dir = predictors_dir,
+                           subset_layers = NULL,
+                           remove_collinear = TRUE,
+                           method = "vif.cor",
+                           method_cor_vif = NULL,
+                           proj = proj,
+                           mask = mask,
+                           sample = TRUE,
+                           nb_points = 1000,
+                           cutoff_cor = 0.7,
+                           cutoff_vif = 7,
+                           export = F,
+                           ouput_dir = getwd(),
+                           as_list = F)
+predictors
+```
+Alternatively, we can pre-select layers by their names and desactivate the collinearity test:
+
+```{r}
+subset_layers <- c("bio2", "bio6", "bio12")
+predictors <- load_predictors(source = "from_tif",
+                          
+                           predictors_dir = predictors_dir,
+                           subset_layers = subset_layers,
+                           remove_collinear = T,
+                           method = "vif.cor",
+                           method_cor_vif = NULL,
+                           proj = proj,
+                           bbox = bbox,
+                           sample = TRUE,
+                           nb_points = 10000,
+                           cutoff_cor = 0.7,
+                           cutoff_vif = 7,
+                           export = F,
+                           ouput_dir = getwd(),
+                           as_list = F)
+
+```
+
+# Load covariates from the stac catalogue
+
+The function load_predictors can also load predictors from the IO stac catalogue. It uses the function load_cube from the library stacatalogue, see the package documentation for further explanation and details.
+
+Here, we select climatic layers from CHELSA in their native resolution.
+
+```{r, warning=F}
+#bbox <- shp_to_bbox(qbc_us_shp)
+predictors_clim <- load_predictors(source = "from_cube",
+                               cube_args = list(stac_path = "https://io.biodiversite-quebec.ca/stac",
+            limit = 5000, 
+            collections = c("chelsa-clim"),     
+            t0 = "1981-01-01",
+            t1 = "1981-01-01",
+            spatial.res = 1000, # in meters
+            temporal.res = "P1Y",
+            aggregation = "mean",
+            resampling = "near",
+            buffer.box = NULL),
+  
+                             subset_layers = subset_layers,
+                           remove_collinear = F,
+                           method = "vif.cor",
+                           method_cor_vif = NULL,
+                           proj = proj,
+                           bbox = bbox,
+                          mask = mask,
+                           sample = TRUE,
+                           nb_points = 50000,
+                           cutoff_cor = 0.7,
+                           cutoff_vif = 3,
+                           export = F,
+                           ouput_dir = getwd(),
+                           as_list = F)
+
+
+```
+```{r, warning = F}
+predictors_topo <- load_predictors(source = "from_cube",
+                               cube_args = list(stac_path = "http://io.biodiversite-quebec.ca/stac/",
+            limit = 5000, 
+            collections = c("ghmts"),     
+            spatial.res = 1000, # in meters
+            temporal.res = "P1Y",
+            aggregation = "mean",
+            resampling = "near",
+            buffer.box = NULL,
+            t0 = NULL,
+            t1 = NULL
+            ),
+                          predictors_dir = predictors_dir,
+                           subset_layers = NULL,
+                           remove_collinear = F,
+                           method = "vif.cor",
+                           method_cor_vif = NULL,
+                           proj = proj,
+                           bbox = bbox,
+                           mask = mask,
+                           sample = TRUE,
+                           nb_points = 50000,
+                           cutoff_cor = 0.7,
+                           cutoff_vif = 3,
+                           export = F,
+                           ouput_dir = getwd(),
+                           as_list = F)
 
 ```
 ```{r}
+predictors <- predictors_clim
+terra::add(predictors) <- predictors_topo
+
+```
+
+```{r}
+ plot(predictors)
+
+```
+
+```{r}
+
     clean_presence <- clean_coordinates(
       presence,
-      predictors,
+      predictors = predictors,
       species_name = species,
       srs = proj,
       unique_id = "id",
       lon = "lon",
       lat = "lat",
       species_col = "scientificName",
+      spatial_res = 1000,
       tests = c(
         "equal",
         "zeros",
         "duplicates",
-        "same_pixel"
+        "same_pixel",
       #  "centroids",
      #   "seas",
      #   "gbif",
      #   "institutions",
-     #   "env"
+        "env"
       ),
       threshold_env = 0.8,
        report = TRUE,
-      dir = outputDir,
+      dir = output_dir,
    value = "clean"
     )
-    clean_presence <-  clean_presence %>% # summary = TRUE means the observations was identified as an outlier at least once during the cleaning procedure
-      dplyr::select(id, scientific_name, lon, lat)
+
+head(clean_presence)
 ```
 
 
@@ -133,20 +217,23 @@ study_extent <- create_study_extent(clean_presence,
                               lat = "lat",
                               proj = proj,
                               method = "mcp",
+                              mask = mask,
                               dist_buffer = 200000,
                               shapefile_path = NULL)
+
+predictors_small <- fast_crop(predictors, study_extent)
+plot(predictors_small)
 ```
 
 ```{r}
-predictors_study_extent <- fast_crop(predictors, study_extent)
+
 n_background <- 10000
 
-background <- create_background(clean_presence,
-                                   predictors_study_extent, 
-                                    lon = "lon",
-                                    lat = "lat",
+background <- create_background(species = species,
+                                   predictors = predictors_small, 
                                     method = "random", #will select random points in predictors_study_extent area
                                     n = n_background,
+                                    obs = clean_presence,
                                    density_bias = NULL) 
     
 
@@ -154,7 +241,7 @@ background <- create_background(clean_presence,
 ```{r}
 clean_background <- clean_coordinates(
       background,
-      predictors_study_extent,
+      predictors = predictors,
       species_name = species,
       srs = proj,
       unique_id = "id",
@@ -164,9 +251,7 @@ clean_background <- clean_coordinates(
       tests = c(
         "equal",
         "zeros",
-        "duplicates",
-        "same_pixel",
-        "env"
+         "env"
        ),
       threshold_env = 0.8,
       value = "clean",
@@ -174,33 +259,70 @@ clean_background <- clean_coordinates(
     )
     
 ```
+
 ```{r}
-library(ggplot2)
-    presence.bg <- dplyr::select(dplyr::bind_rows(clean_presence %>% dplyr::mutate(pa = 1),
-                                                  clean_background %>% dplyr::mutate(pa = 0)),
-                                 pa,lon,lat) %>% dplyr::mutate(pa = factor(pa))
-    
-    pb.vals <- terra::extract(predictors_study_extent, dplyr::select(presence.bg, lon, lat))
-    presence.bg.vals <- dplyr::bind_cols(presence.bg,
-                        pb.vals) %>% dplyr::select(-ID)
-    dens_plots <- create_density_plots(presence.bg.vals, factors = c(), export = T, path = "./density_plots.pdf" )
-dens_plots
+sdm_data <- setup_sdm_data(
+  clean_presence,
+  clean_background,
+  predictors_small,
+  partition_type = "none")                            
 ```
 ```{r}
+
+dens_plots <- create_density_plots(sdm_data, covars = names(predictors), factors = c(), export = T, path = "./density_plots.pdf" )
+dens_plots
+```
+
+```{r}
   #dir.create(file.path(sprintf("%s/%s/maxEnt", outputDir, species)), showWarnings = FALSE) #dir.create() does not crash if the directory already exists}
-    library(ENMeval)
     # First, we calculate models using the list of fc and rm provided
     partition_type <-  c("block")
-    modTuning <- run_maxent(presence.bg.vals, 
-                             with_raster = F, # can be set to F to speed up
+    mod_tuning <- run_maxent(sdm_data, 
+                             with_raster = F,  # can be set to F to speed up
+                             covars = names(predictors),
                              algorithm = "maxent.jar",
-                             predictors = predictors_study_extent,
                              partition_type = partition_type,
                              factors = NULL,
-                              nfolds = 5, #used if partition_type is "randomkfold"
-                             rm = 1, fc = "L",
+                            nfolds = 5, #used if partition_type is "randomkfold"
+                             rm = 1, 
+                             fc = "L",
                              parallel = T,
                              updateProgress = T,
                              parallelType = "doParallel")
 
+    res_tuning <- mod_tuning@results
+    print(res_tuning)  
+```
+
+```{r}
+  # Selection resTuningof fc and rm parameters
+  tuned_param <- select_param(res_tuning, method = "p10", list = F)
+  pred_pres <- predict_maxent(mod_tuning,
+  algorithm = "maxent.jar",
+  param = tuned_param,
+   predictors_small, type = "cloglog")
+
+   raster::plot(pred_pres)
+```
+
+```{r}
+  # Selection resTuningof fc and rm parameters
+  r_plot <- response_plot(mod_tuning, algorithm = "maxent.jar",
+  param = tuned_param, type = "cloglog", path = "./response_plot.jpeg") 
+  
+```
+
+
+```{r}
+  # Selection resTuningof fc and rm parameters
+thresh <- find_threshold(pred_pres, occs = mod_tuning@occs[, c("lon", "lat")],
+                          bg = mod_tuning@bg[, c("lon", "lat")],
+                          type = "spse") 
+
+sprintf("Selected threshold: %f", thresh)
+```
+
+```{r}
+pred_bin <- binarize_pred(pred_pres, thresh)
+plot(pred_bin)
 ```

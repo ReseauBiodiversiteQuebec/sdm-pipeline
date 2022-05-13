@@ -1,5 +1,6 @@
-#' @name load_predictors
+#' @title Load predictor variables from tiff files or the stac catalogue
 #' 
+#' @name load_predictors
 #' @param from_tif, string, path to the folder containing the initial raster layers
 #' @param subsetLayers, a vector, containing the name of layers to select. If NULL, all layers in dir.pred selected by default.
 #' @param removeCollinear, boolean. If TRUE, an analysis of collinearity is performed. 
@@ -115,7 +116,7 @@ load_predictors <- function(source = "from_cube",
                                    cutoff_cor = cutoff_cor,
                                    cutoff_vif = cutoff_vif,
                                    export = export,
-                                   title_export = "Correlation plot of climatic and topographic variables.",
+                                   title_export = "Correlation plot of environmental variables.",
                                    path = ouput_dir) 
     
   }                               

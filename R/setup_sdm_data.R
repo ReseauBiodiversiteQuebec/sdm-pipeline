@@ -1,4 +1,17 @@
+#' @title Create a datasets to feed any sdm algorithm
+#' 
+#' @name setup_sdm_data
+#' @param presence data frame, containing the presence
+#' @param background data frame, containing the absence or background points
+#' @param predictors spat raster, predictors
+#' @param partition_type string, partition method (not yet used) LET TO "none"
+#' @param runs_n int, number of runs (not yet used) 
+#' @param boot_proportion int, number of runs (not yet used) 
+#' @param cv_partitions int, (not yet used) 
+#' @param seed (not yet used) 
+#' @return a data frame
 #' @export
+#' 
 setup_sdm_data <- function(
   presence,
   background,
@@ -7,7 +20,7 @@ setup_sdm_data <- function(
   runs_n = 2,
   boot_proportion = 0.7,
   cv_partitions = NULL,
-  seed=NULL) {
+  seed = NULL) {
   
   
   #creates metadata for this run

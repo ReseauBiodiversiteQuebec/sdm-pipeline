@@ -1,4 +1,4 @@
-#' @title Clean
+#' @title Clean coordinates
 #'
 #' @name clean_coordinates
 #' @param x, a dataframe of observation containing at least:

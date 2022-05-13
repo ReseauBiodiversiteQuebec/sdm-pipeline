@@ -1,11 +1,16 @@
+#' @title Create background points
+#'
 #' @name create_background
-#' @param obs data frame, containing the coordinates to reproject
-#' @param predictors, raster
-#' @param lon string, name of the longitude column (same projection as predictor raster)
-#' @param lat string, name of the latitude column (same projection as predictor raster)
-#' @param proj character, initial projection of the xy coordinates
+#' @param predictors spat raster, containing the predictor variables
+#' @param mask, spat vector, mask to apply to the predictors.
+#' @param method string, random, inclusion_buffer, thickening or biased.
+#' @param n integer, number of background points to select.
+#' @param obs data.frame, containing the observations. Used with method == "thickening" or "inclusion_buffer"
+#' @param width_buffer int, buffer width around observations. Used with method ==  "inclusion_buffer"
+#' @param species string, species name.
 #' @return spatial points
 #' @export
+
 create_background <- function(
   predictors,
   mask = NULL,

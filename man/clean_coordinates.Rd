@@ -2,7 +2,7 @@
 % Please edit documentation in R/clean_coordinates.R
 \name{clean_coordinates}
 \alias{clean_coordinates}
-\title{Clean}
+\title{Clean coordinates}
 \usage{
 clean_coordinates(
   x,
@@ -75,5 +75,5 @@ if value == 'flagged', observations dataframe x with a column 'flagged'
 TRUE = clean coordinate, FALSE = potentially problematic (= at least one test failed).
 }
 \description{
-Clean
+Clean coordinates
 }

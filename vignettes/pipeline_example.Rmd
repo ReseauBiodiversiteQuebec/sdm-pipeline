@@ -15,8 +15,8 @@ knitr::opts_chunk$set(
 ```
 
 ```{r}
-#library(sdmpipeline)
-devtools::load_all()
+library(sdmpipeline)
+#devtools::load_all()
 library(stacatalogue)
 library(rgbif)
 library(ggplot2)
@@ -78,27 +78,6 @@ predictors <- load_predictors(source = "from_tif",
 predictors
 ```
 Alternatively, we can pre-select layers by their names and desactivate the collinearity test:
-
-```{r}
-subset_layers <- c("bio2", "bio6", "bio12")
-predictors <- load_predictors(source = "from_tif",
-                          
-                           predictors_dir = predictors_dir,
-                           subset_layers = subset_layers,
-                           remove_collinear = T,
-                           method = "vif.cor",
-                           method_cor_vif = NULL,
-                           proj = proj,
-                           bbox = bbox,
-                           sample = TRUE,
-                           nb_points = 10000,
-                           cutoff_cor = 0.7,
-                           cutoff_vif = 7,
-                           export = F,
-                           ouput_dir = getwd(),
-                           as_list = F)
-
-```
 
 # Load covariates from the stac catalogue
 

@@ -72,7 +72,16 @@ project_coords <- function(xy, lon = "lon", lat = "lat", proj_from, proj_to = NU
   xy
 }
 
-
+add_predictors <- function(obs, lon = "lon", lat = "lat", predictors){
+  if (inherits(predictors, "cube")) {
+    predictors <- cube_to_raster(predictors, format = "terra")
+  }
+  env.vals <- terra::extract(predictors, dplyr::select(obs, dplyr::all_of(c(lon, lat))))
+  obs <- dplyr::bind_cols(obs,
+                          env.vals) %>% dplyr::select(-ID)
+  
+  return(obs)
+  }
 
 #' @name points_to_bbox
 #' @param xy data frame, containing the coordinates to reproject

@@ -52,7 +52,7 @@ bbox <- points_to_bbox(dplyr::select(presence, lon, lat), proj_from = proj, buff
 
 
 ```{r}
-mask <- vect("C:/GitHub/sdm-pipeline/data/shape_study_area_nolakes_nad83.shp")
+mask <- terra::vect("C:/GitHub/sdm-pipeline/data/shape_study_area_nolakes_nad83.shp")
 ```
 # Load covariates from local tif files
 
@@ -62,8 +62,8 @@ As a first option, we choose to load predictors from local tif files (in the fol
 predictors_dir <- "C:/Users/vals3103/Dropbox/Post-doc/data/environmental/out/chelsa"
 predictors <- load_predictors(source = "from_tif",
                            predictors_dir = predictors_dir,
-                           subset_layers = NULL,
-                           remove_collinear = TRUE,
+                           subset_layers = c("bio1", "bio2"),
+                           remove_collinear = F,
                            method = "vif.cor",
                            method_cor_vif = NULL,
                            proj = proj,
@@ -180,7 +180,7 @@ terra::add(predictors) <- predictors_topo
      #   "institutions",
         "env"
       ),
-      threshold_env = 0.8,
+      threshold_env = 0.5,
        report = TRUE,
       dir = output_dir,
    value = "clean"
@@ -201,7 +201,7 @@ study_extent <- create_study_extent(clean_presence,
                               shapefile_path = NULL)
 
 predictors_small <- fast_crop(predictors, study_extent)
-plot(predictors_small)
+raster::plot(predictors_small)
 ```
 
 ```{r}

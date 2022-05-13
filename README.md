@@ -13,7 +13,7 @@
 Installer le package dans le nouvel environnement.
 
  ```r
-devtools::install_github("ReseauBiodiversiteQuebec/sdmpipeline")
+devtools::install_github("ReseauBiodiversiteQuebec/sdm-pipeline")
  ```
 
 ### Avec R env
@@ -28,5 +28,5 @@ quit()
 Redémarrez la console R et installer le package.
 
  ```r
-devtools::install_github("ReseauBiodiversiteQuebec/sdmpipeline")
+devtools::install_github("ReseauBiodiversiteQuebec/sdm-pipeline")
  ```

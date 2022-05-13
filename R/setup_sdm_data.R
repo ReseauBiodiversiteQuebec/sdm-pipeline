@@ -11,8 +11,8 @@ setup_sdm_data <- function(
   
   
   #creates metadata for this run
-  presence <- presence %>% dplyr::mutate(pa = 1)
-  background <- background %>% dplyr::mutate(pa = 0)
+  presence <- presence %>% dplyr::mutate(pa = as.factor(1))
+  background <- background %>% dplyr::mutate(pa = as.factor(0))
   
   if (partition_type == "none") {
     message("no data partition")

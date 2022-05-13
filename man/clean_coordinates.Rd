@@ -7,7 +7,6 @@
 clean_coordinates(
   x,
   predictors = NULL,
-  cube = NULL,
   unique_id = "id",
   lon = "lon",
   lat = "lat",

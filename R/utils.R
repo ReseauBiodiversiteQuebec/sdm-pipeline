@@ -139,13 +139,12 @@ shp_to_bbox <- function(shp, proj_from = NULL, proj_to = NULL) {
 #' @import ggplot2
 #' @return spatial points in the proj_to projection
 #' @export
-create_density_plots <- function (df, factors = NULL, export = T, path = "./density_plot.pdf") 
+create_density_plots <- function (df, covars, factors = NULL, export = T, path = "./density_plot.pdf") 
 {
   df <- df %>% dplyr::mutate_at(.vars = factors, factor)
   i <- 1
   a <- list()
-  for (var in names(df)[-which(names(df) %in% c("pa", 
-                                                "lon", "lat", factors))]) {
+  for (var in covars) {
     a[[i]] <- plot_density_cont(df, var)
     i <- i + 1
   }

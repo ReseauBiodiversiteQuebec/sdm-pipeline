@@ -53,6 +53,7 @@ bbox <- points_to_bbox(dplyr::select(presence, lon, lat), proj_from = proj, buff
 
 ```{r}
 mask <- terra::vect("C:/GitHub/sdm-pipeline/data/shape_study_area_nolakes_nad83.shp")
+bbox <- shp_to_bbox(mask)
 ```
 # Load covariates from local tif files
 
@@ -62,8 +63,8 @@ As a first option, we choose to load predictors from local tif files (in the fol
 predictors_dir <- "C:/Users/vals3103/Dropbox/Post-doc/data/environmental/out/chelsa"
 predictors <- load_predictors(source = "from_tif",
                            predictors_dir = predictors_dir,
-                           subset_layers = c("bio1", "bio2"),
-                           remove_collinear = F,
+                           subset_layers = NULL,
+                           remove_collinear = T,
                            method = "vif.cor",
                            method_cor_vif = NULL,
                            proj = proj,
@@ -116,36 +117,6 @@ predictors_clim <- load_predictors(source = "from_cube",
 
 
 ```
-```{r, warning = F}
-predictors_topo <- load_predictors(source = "from_cube",
-                               cube_args = list(stac_path = "http://io.biodiversite-quebec.ca/stac/",
-            limit = 5000, 
-            collections = c("ghmts"),     
-            spatial.res = 1000, # in meters
-            temporal.res = "P1Y",
-            aggregation = "mean",
-            resampling = "near",
-            buffer.box = NULL,
-            t0 = NULL,
-            t1 = NULL
-            ),
-                          predictors_dir = predictors_dir,
-                           subset_layers = NULL,
-                           remove_collinear = F,
-                           method = "vif.cor",
-                           method_cor_vif = NULL,
-                           proj = proj,
-                           bbox = bbox,
-                           mask = mask,
-                           sample = TRUE,
-                           nb_points = 50000,
-                           cutoff_cor = 0.7,
-                           cutoff_vif = 3,
-                           export = F,
-                           ouput_dir = getwd(),
-                           as_list = F)
-
-```
 ```{r}
 predictors <- predictors_clim
 terra::add(predictors) <- predictors_topo
@@ -180,7 +151,7 @@ terra::add(predictors) <- predictors_topo
      #   "institutions",
         "env"
       ),
-      threshold_env = 0.5,
+      threshold_env = 0.2,
        report = TRUE,
       dir = output_dir,
    value = "clean"
@@ -195,13 +166,15 @@ study_extent <- create_study_extent(clean_presence,
                               lon = "lon",
                               lat = "lat",
                               proj = proj,
-                              method = "mcp",
-                              mask = mask,
+                              method = "buffer",
+                              mask = NULL,
                               dist_buffer = 200000,
                               shapefile_path = NULL)
 
 predictors_small <- fast_crop(predictors, study_extent)
-raster::plot(predictors_small)
+#raster::plot(predictors_small)
+study_extent
+raster::plot(study_extent)
 ```
 
 ```{r}
@@ -240,6 +213,7 @@ clean_background <- clean_coordinates(
 ```
 
 ```{r}
+
 sdm_data <- setup_sdm_data(
   clean_presence,
   clean_background,
@@ -247,8 +221,8 @@ sdm_data <- setup_sdm_data(
   partition_type = "none")                            
 ```
 ```{r}
-
-dens_plots <- create_density_plots(sdm_data, covars = names(predictors), factors = c(), export = T, path = "./density_plots.pdf" )
+species_dir <- sprintf("%s/%s", output_dir, species)
+dens_plots <- create_density_plots(sdm_data, covars = names(predictors), factors = c(), export = T, path = paste0(species_dir, "/density_plots.pdf"))
 dens_plots
 ```
 
@@ -275,9 +249,8 @@ dens_plots
 
 ```{r}
   # Selection resTuningof fc and rm parameters
-  tuned_param <- select_param(res_tuning, method = "p10", list = F)
+  tuned_param <- select_param(res_tuning, method = "AIC", list = F)
   pred_pres <- predict_maxent(mod_tuning,
-  algorithm = "maxent.jar",
   param = tuned_param,
    predictors_small, type = "cloglog")
 
@@ -286,7 +259,7 @@ dens_plots
 
 ```{r}
   # Selection resTuningof fc and rm parameters
-  r_plot <- response_plot(mod_tuning, algorithm = "maxent.jar",
+  r_plot <- response_plot(mod_tuning, 
   param = tuned_param, type = "cloglog", path = "./response_plot.jpeg") 
   
 ```
@@ -303,5 +276,5 @@ sprintf("Selected threshold: %f", thresh)
 
 ```{r}
 pred_bin <- binarize_pred(pred_pres, thresh)
-plot(pred_bin)
+raster::plot(pred_bin)
 ```

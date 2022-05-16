@@ -123,7 +123,7 @@ select_param <- function(res, method = "AIC", auc_min = 0, list = T) {
 #' @import dismo
 #' @export
 
-response_plot <- function(mod, param, type = "cloglog") {
+response_plot <- function(mod, param, type = "cloglog", path = NULL) {
 
   algorithm <- mod@algorithm
 

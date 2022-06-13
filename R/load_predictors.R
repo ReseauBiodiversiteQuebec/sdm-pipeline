@@ -89,7 +89,7 @@ load_predictors <- function(source = "from_cube",
   } else {
 
     cube_args_c <- append(cube_args, list(layers = subset_layers, 
-                                          srs.cube = proj, use.obs = F, 
+                                          srs.cube = proj, 
                                           bbox = bbox))
     
     all_predictors <- do.call(stacatalogue::load_cube, cube_args_c)
@@ -133,7 +133,7 @@ load_predictors <- function(source = "from_cube",
     } else {
       
       cube_args_nc <- append(cube_args, list(layers = nc_names, 
-                                             srs.cube = proj, use.obs = F, 
+                                             srs.cube = proj,
                                              bbox = bbox))
       output <- do.call(stacatalogue::load_cube, cube_args_nc)
       output <- cube_to_raster(output, format = "terra")

@@ -2,3 +2,4 @@ scratch*
 renv*
 .Rprofile
 inst/doc
+.Rproj.user

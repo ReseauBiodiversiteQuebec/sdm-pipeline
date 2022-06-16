@@ -97,8 +97,7 @@ predictors_clim <- load_predictors(source = "from_cube",
             spatial.res = 1000, # in meters
             temporal.res = "P1Y",
             aggregation = "mean",
-            resampling = "near",
-            buffer.box = NULL),
+            resampling = "near"),
   
                              subset_layers = subset_layers,
                            remove_collinear = F,
